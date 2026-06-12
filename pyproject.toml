@@ -1,4 +1,4 @@
-@"
+﻿@"
 [project]
 name = "rf-signal-intelligence-lab"
 version = "0.1.0"
@@ -19,7 +19,7 @@ keywords = [
 ]
 
 [project.urls]
-Repository = "https://github.com/YOUR_GITHUB_USERNAME/rf-signal-intelligence-lab"
+Repository = "https://github.com/AdnanTawkul/rf-signal-intelligence-lab"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
