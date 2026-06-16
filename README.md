@@ -1,4 +1,3 @@
-@"
 # RF Signal Intelligence Lab
 
 A local, reproducible AI research project for RF modulation recognition from synthetic raw IQ signal data.
