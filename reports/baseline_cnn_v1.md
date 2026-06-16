@@ -308,3 +308,73 @@ It improved 16QAM classification and one seed's test score, but across five inde
 6. Made training instability worse.
 
 The result demonstrates why single-seed improvements must not be treated as evidence.
+
+## GroupNorm Ablation and Baseline Promotion
+
+A controlled normalization-layer ablation replaced BatchNorm with GroupNorm while preserving the dataset, CNN architecture, optimizer, learning rate, batch size, 30-epoch budget, five random seeds, and disabled RMS input normalization.
+
+The GroupNorm configuration used eight groups in every convolutional block.
+
+### Five-Seed Validation Comparison
+
+| Metric | BatchNorm | GroupNorm | Change |
+|---|---:|---:|---:|
+| Mean best validation accuracy | 94.17% | 95.64% | +1.47 percentage points |
+| Best-validation standard deviation | 0.31 pp | 0.40 pp | +0.09 pp |
+| Minimum best validation accuracy | 93.57% | 95.29% | +1.72 percentage points |
+| Maximum best validation accuracy | 94.50% | 96.43% | +1.93 percentage points |
+| Mean final validation accuracy | 88.39% | 94.10% | +5.71 percentage points |
+| Final-validation standard deviation | 4.13 pp | 2.34 pp | -1.79 pp |
+
+Every GroupNorm run exceeded the maximum BatchNorm best-validation result. GroupNorm also improved final-epoch validation accuracy and reduced its variation substantially.
+
+### Five-Seed Held-Out Test Comparison
+
+| Metric | BatchNorm | GroupNorm | Change |
+|---|---:|---:|---:|
+| Mean test accuracy | 94.24% | 95.29% | +1.05 percentage points |
+| Test standard deviation | 0.29 pp | 0.45 pp | +0.16 pp |
+| Minimum test accuracy | 93.93% | 94.71% | +0.78 percentage points |
+| Maximum test accuracy | 94.71% | 96.07% | +1.36 percentage points |
+| BPSK accuracy | 99.77% | 99.89% | +0.12 percentage points |
+| QPSK accuracy | 87.77% | 92.23% | +4.46 percentage points |
+| 8PSK accuracy | 93.09% | 89.94% | -3.15 percentage points |
+| 16QAM accuracy | 96.34% | 99.09% | +2.75 percentage points |
+| Accuracy at -4 dB | 70.50% | 74.90% | +4.40 percentage points |
+| Accuracy at 0 dB | 94.60% | 93.40% | -1.20 percentage points |
+
+### Mean GroupNorm Accuracy by SNR
+
+| SNR | Mean accuracy | Standard deviation |
+|---:|---:|---:|
+| -4 dB | 74.90% | 2.58 percentage points |
+| 0 dB | 93.40% | 1.07 percentage points |
+| 4 dB | 99.40% | 0.37 percentage points |
+| 8 dB | 99.80% | 0.24 percentage points |
+| 12 dB | 99.90% | 0.20 percentage points |
+| 16 dB | 99.90% | 0.20 percentage points |
+| 20 dB | 99.70% | 0.60 percentage points |
+
+### Five-Seed GroupNorm Test Figure
+
+![GroupNorm five-seed held-out evaluation](figures/baseline_cnn_groupnorm_seed_sweep_v1_test.png)
+
+### Decision
+
+GroupNorm replaces BatchNorm as the selected supervised baseline.
+
+The decision is supported by higher mean and worst-seed held-out accuracy, stronger QPSK and 16QAM performance, improved -4 dB performance, higher validation accuracy, and much stronger late-training stability.
+
+The tradeoff is a 3.15 percentage-point reduction in mean 8PSK accuracy and a small increase in overall test variance. These regressions remain explicit research targets.
+
+### Selected Supervised Baseline Claim
+
+```text
+95.29% ± 0.45 percentage points held-out test accuracy across five independent training seeds
+```
+
+This supersedes the BatchNorm baseline result of:
+
+```text
+94.24% ± 0.29 percentage points
+```

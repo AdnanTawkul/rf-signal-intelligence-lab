@@ -57,3 +57,6 @@ desktop.ini
 !reports/figures/baseline_cnn_v1_confusion_matrix.png
 !reports/figures/baseline_cnn_v1_accuracy_by_snr.png
 !reports/figures/baseline_cnn_v1_class_snr_accuracy.png
+
+# Selected GroupNorm baseline figure
+!reports/figures/baseline_cnn_groupnorm_seed_sweep_v1_test.png
