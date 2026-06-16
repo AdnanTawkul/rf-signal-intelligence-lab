@@ -97,6 +97,33 @@ def apply_phase_offset(
     return (iq * phase_rotation).astype(np.complex64)
 
 
+
+def apply_amplitude_scaling(
+    samples: ArrayLike,
+    amplitude_scale: float,
+) -> ComplexArray:
+    """Apply a positive linear amplitude scale to complex IQ samples.
+
+    Args:
+        samples: One-dimensional complex IQ signal.
+        amplitude_scale: Positive linear amplitude multiplier. A value above
+            one increases signal amplitude, while a value between zero and one
+            attenuates it.
+
+    Returns:
+        Amplitude-scaled complex IQ samples with dtype ``complex64``.
+
+    Raises:
+        ValueError: If the input signal or amplitude scale is invalid.
+    """
+    iq = _validate_iq_samples(samples)
+
+    if not np.isfinite(amplitude_scale) or amplitude_scale <= 0.0:
+        raise ValueError("amplitude_scale must be positive and finite.")
+
+    return (iq * np.float32(amplitude_scale)).astype(np.complex64)
+
+
 def apply_frequency_offset(
     samples: ArrayLike,
     frequency_offset_hz: float,
@@ -146,6 +173,7 @@ def apply_frequency_offset(
 
 __all__ = [
     "add_awgn",
+    "apply_amplitude_scaling",
     "apply_frequency_offset",
     "apply_phase_offset",
 ]
