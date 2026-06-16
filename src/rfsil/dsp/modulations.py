@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -15,11 +15,13 @@ class Modulation(StrEnum):
 
     BPSK = "bpsk"
     QPSK = "qpsk"
+    PSK8 = "8psk"
+    QAM16 = "16qam"
 
 
 @dataclass(frozen=True)
 class IQSignal:
-    """Container for generated complex IQ data and its discrete symbol labels."""
+    """Container for generated complex IQ data and symbol labels."""
 
     samples: ComplexArray
     symbols: IntArray
@@ -28,12 +30,45 @@ class IQSignal:
     sample_rate_hz: float
 
 
+def _psk_constellation(order: int) -> ComplexArray:
+    """Create a unit-power phase-shift keying constellation."""
+    phases = (
+        2.0
+        * np.pi
+        * np.arange(order, dtype=np.float64)
+        / float(order)
+    )
+
+    return np.exp(1j * phases).astype(np.complex64)
+
+
+def _square_qam_constellation(levels: IntArray) -> ComplexArray:
+    """Create a normalized square quadrature-amplitude constellation."""
+    in_phase, quadrature = np.meshgrid(
+        levels,
+        levels[::-1],
+    )
+
+    points = (
+        in_phase.astype(np.float32)
+        + 1j * quadrature.astype(np.float32)
+    ).reshape(-1)
+
+    average_power = float(np.mean(np.abs(points) ** 2))
+    normalized = points / np.sqrt(average_power)
+
+    return normalized.astype(np.complex64)
+
+
 def _constellation(modulation: Modulation) -> ComplexArray:
     """Return normalized constellation points for a modulation scheme."""
     if modulation == Modulation.BPSK:
-        points = np.array([-1.0 + 0.0j, 1.0 + 0.0j], dtype=np.complex64)
+        return np.array(
+            [-1.0 + 0.0j, 1.0 + 0.0j],
+            dtype=np.complex64,
+        )
 
-    elif modulation == Modulation.QPSK:
+    if modulation == Modulation.QPSK:
         points = np.array(
             [
                 1.0 + 1.0j,
@@ -43,12 +78,21 @@ def _constellation(modulation: Modulation) -> ComplexArray:
             ],
             dtype=np.complex64,
         )
-        points = points / np.sqrt(2.0)
 
-    else:
-        raise ValueError(f"Unsupported modulation: {modulation}")
+        return (points / np.sqrt(2.0)).astype(np.complex64)
 
-    return points.astype(np.complex64)
+    if modulation == Modulation.PSK8:
+        return _psk_constellation(order=8)
+
+    if modulation == Modulation.QAM16:
+        levels = np.array(
+            [-3, -1, 1, 3],
+            dtype=np.int_,
+        )
+
+        return _square_qam_constellation(levels)
+
+    raise ValueError(f"Unsupported modulation: {modulation}")
 
 
 def generate_iq_signal(
@@ -58,21 +102,23 @@ def generate_iq_signal(
     sample_rate_hz: float = 1_000_000.0,
     seed: int | None = None,
 ) -> IQSignal:
-    """Generate a simple synthetic complex baseband IQ signal.
+    """Generate a synthetic complex baseband IQ signal.
 
-    The generated waveform uses rectangular pulse shaping. This is intentionally
-    simple for the first milestone. Pulse shaping and channel impairments are
-    added later as separate, testable DSP components.
+    The waveform currently uses rectangular pulse shaping. More realistic root
+    raised cosine pulse shaping will be implemented as a separate DSP stage.
 
     Args:
-        modulation: Modulation name, currently 'bpsk' or 'qpsk'.
-        num_symbols: Number of random modulation symbols to generate.
-        samples_per_symbol: Number of IQ samples per discrete symbol.
-        sample_rate_hz: Sample rate of the generated baseband signal.
+        modulation: Supported modulation name.
+        num_symbols: Number of random symbols to generate.
+        samples_per_symbol: Number of IQ samples per symbol.
+        sample_rate_hz: Baseband sample rate in hertz.
         seed: Optional random seed for reproducibility.
 
     Returns:
-        IQSignal containing repeated complex IQ samples and symbol labels.
+        IQSignal containing complex IQ samples and symbol indices.
+
+    Raises:
+        ValueError: If the modulation or generation parameters are invalid.
     """
     modulation = Modulation(modulation)
 
@@ -82,8 +128,8 @@ def generate_iq_signal(
     if samples_per_symbol <= 0:
         raise ValueError("samples_per_symbol must be positive.")
 
-    if sample_rate_hz <= 0:
-        raise ValueError("sample_rate_hz must be positive.")
+    if not np.isfinite(sample_rate_hz) or sample_rate_hz <= 0.0:
+        raise ValueError("sample_rate_hz must be positive and finite.")
 
     points = _constellation(modulation)
     rng = np.random.default_rng(seed)
@@ -96,7 +142,10 @@ def generate_iq_signal(
     )
 
     symbol_values = points[symbols]
-    samples = np.repeat(symbol_values, samples_per_symbol).astype(np.complex64)
+    samples = np.repeat(
+        symbol_values,
+        samples_per_symbol,
+    ).astype(np.complex64)
 
     return IQSignal(
         samples=samples,

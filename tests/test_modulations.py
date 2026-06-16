@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import numpy as np
 import pytest
@@ -23,28 +23,69 @@ def test_generate_bpsk_signal_shape_and_dtype() -> None:
     assert signal.sample_rate_hz == 1_000_000.0
 
 
-def test_generate_qpsk_signal_has_unit_power_constellation() -> None:
+@pytest.mark.parametrize(
+    ("modulation", "expected_point_count"),
+    [
+        (Modulation.BPSK, 2),
+        (Modulation.QPSK, 4),
+        (Modulation.PSK8, 8),
+        (Modulation.QAM16, 16),
+    ],
+)
+def test_supported_modulation_has_expected_constellation_size(
+    modulation: Modulation,
+    expected_point_count: int,
+) -> None:
     signal = generate_iq_signal(
-        modulation="qpsk",
-        num_symbols=128,
-        samples_per_symbol=2,
+        modulation=modulation,
+        num_symbols=4_096,
+        samples_per_symbol=1,
         seed=42,
     )
 
     unique_points = np.unique(signal.samples)
 
-    assert len(unique_points) <= 4
-    np.testing.assert_allclose(
-        np.abs(unique_points),
-        np.ones_like(np.abs(unique_points)),
-        rtol=1e-6,
-        atol=1e-6,
+    assert len(unique_points) == expected_point_count
+
+
+@pytest.mark.parametrize(
+    "modulation",
+    [
+        Modulation.BPSK,
+        Modulation.QPSK,
+        Modulation.PSK8,
+        Modulation.QAM16,
+    ],
+)
+def test_constellation_has_unit_average_power(
+    modulation: Modulation,
+) -> None:
+    signal = generate_iq_signal(
+        modulation=modulation,
+        num_symbols=4_096,
+        samples_per_symbol=1,
+        seed=42,
     )
+
+    unique_points = np.unique(signal.samples)
+    average_power = float(np.mean(np.abs(unique_points) ** 2))
+
+    assert average_power == pytest.approx(1.0, abs=1e-6)
 
 
 def test_generate_iq_signal_is_reproducible_with_seed() -> None:
-    signal_a = generate_iq_signal("qpsk", num_symbols=32, samples_per_symbol=8, seed=7)
-    signal_b = generate_iq_signal("qpsk", num_symbols=32, samples_per_symbol=8, seed=7)
+    signal_a = generate_iq_signal(
+        "16qam",
+        num_symbols=32,
+        samples_per_symbol=8,
+        seed=7,
+    )
+    signal_b = generate_iq_signal(
+        "16qam",
+        num_symbols=32,
+        samples_per_symbol=8,
+        seed=7,
+    )
 
     np.testing.assert_array_equal(signal_a.symbols, signal_b.symbols)
     np.testing.assert_array_equal(signal_a.samples, signal_b.samples)
