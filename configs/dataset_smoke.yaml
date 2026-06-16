@@ -1,0 +1,39 @@
+dataset_name: rf_modulation_smoke_v1
+output_directory: data/processed/rf_modulation_smoke_v1
+seed: 2026
+
+sample_count: 2048
+sample_rate_hz: 1000000.0
+samples_per_symbol: 8
+rolloff: 0.35
+span_symbols: 8
+
+snr_values_db:
+  - -6.0
+  - 0.0
+  - 6.0
+  - 12.0
+  - 18.0
+
+frequency_offset_range_hz:
+  - -15000.0
+  - 15000.0
+
+phase_offset_range_rad:
+  - -3.141592653589793
+  - 3.141592653589793
+
+amplitude_scale_range:
+  - 0.70
+  - 1.30
+
+time_shift_range_samples:
+  - -8
+  - 8
+
+rayleigh_probability: 0.35
+
+splits:
+  train: 8
+  validation: 2
+  test: 2
