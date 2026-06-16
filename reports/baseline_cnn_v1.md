@@ -247,3 +247,64 @@ The defensible baseline result is:
 ```
 
 This replaces the weaker single-run claim of 94.14%.
+
+## RMS Normalization Ablation
+
+A controlled ablation tested per-example complex RMS normalization while keeping the dataset, architecture, optimizer, batch size, epoch count, and training seeds unchanged.
+
+The transform scales every IQ example to unit average complex power while preserving relative constellation geometry.
+
+### Single-Seed Result
+
+For seed 2026, RMS normalization appeared beneficial:
+
+| Metric | Original | RMS-normalized | Change |
+|---|---:|---:|---:|
+| Overall test accuracy | 94.14% | 94.79% | +0.65 percentage points |
+| QPSK accuracy | 85.71% | 86.57% | +0.86 percentage points |
+| 8PSK accuracy | 94.86% | 94.00% | -0.86 percentage points |
+| 16QAM accuracy | 96.00% | 98.57% | +2.57 percentage points |
+| Accuracy at -4 dB | 70.50% | 73.50% | +3.00 percentage points |
+| Accuracy at 0 dB | 93.50% | 90.50% | -3.00 percentage points |
+
+This single-run result was not sufficient to support a model change.
+
+### Five-Seed Validation Comparison
+
+| Metric | Original | RMS-normalized | Change |
+|---|---:|---:|---:|
+| Mean best validation accuracy | 94.17% | 93.76% | -0.41 percentage points |
+| Best-validation standard deviation | 0.31 pp | 0.49 pp | Worse |
+| Minimum best validation accuracy | 93.57% | 93.07% | Worse |
+| Mean final validation accuracy | 88.39% | 84.94% | -3.45 percentage points |
+| Final-validation standard deviation | 4.13 pp | 8.36 pp | Worse |
+
+RMS normalization reduced mean validation performance and approximately doubled final-epoch variability.
+
+### Five-Seed Held-Out Test Comparison
+
+| Metric | Original | RMS-normalized | Change |
+|---|---:|---:|---:|
+| Mean test accuracy | 94.24% | 93.93% | -0.31 percentage points |
+| Test standard deviation | 0.29 pp | 0.80 pp | Worse |
+| Minimum test accuracy | 93.93% | 92.43% | -1.50 percentage points |
+| QPSK accuracy | 87.77% | 86.23% | -1.54 percentage points |
+| 8PSK accuracy | 93.09% | 90.86% | -2.23 percentage points |
+| 16QAM accuracy | 96.34% | 98.69% | +2.35 percentage points |
+| Accuracy at -4 dB | 70.50% | 68.90% | -1.60 percentage points |
+| Accuracy at 0 dB | 94.60% | 89.80% | -4.80 percentage points |
+
+### Ablation Conclusion
+
+Per-example RMS normalization is rejected as the default preprocessing method for Baseline CNN v1.
+
+It improved 16QAM classification and one seed's test score, but across five independent runs it:
+
+1. Reduced mean held-out accuracy.
+2. Increased test variance.
+3. Lowered the worst-seed result.
+4. Degraded QPSK and 8PSK performance.
+5. Reduced accuracy at both -4 dB and 0 dB.
+6. Made training instability worse.
+
+The result demonstrates why single-seed improvements must not be treated as evidence.
