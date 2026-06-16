@@ -115,14 +115,14 @@ def main() -> None:
     print(f"Seeds: {seeds}")
 
     for run_index, seed in enumerate(seeds, start=1):
-        run_name = f"baseline_cnn_v1_seed_{seed}"
+        run_name = f"{experiment_name}_seed_{seed}"
         run_output_directory = (
             output_directory
             / f"seed_{seed}"
         )
         run_figure_path = (
             figure_path.parent
-            / f"baseline_cnn_v1_seed_{seed}_training.png"
+            / f"{experiment_name}_seed_{seed}_training.png"
         )
 
         print("")
