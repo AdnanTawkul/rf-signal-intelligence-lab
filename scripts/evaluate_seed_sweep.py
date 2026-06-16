@@ -338,7 +338,7 @@ def main() -> None:
         lower_bound,
         upper_bound,
         alpha=0.25,
-        label="?1 standard deviation",
+        label="1 standard deviation",
     )
     axes[1].set_title("Mean Test Accuracy by SNR")
     axes[1].set_xlabel("SNR (dB)")
