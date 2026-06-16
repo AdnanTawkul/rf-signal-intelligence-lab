@@ -161,3 +161,89 @@ The next experiments should target evidence, not random tuning:
 5. Test low-SNR-aware sampling or curriculum strategies.
 6. Add confidence calibration and uncertainty evaluation.
 7. Evaluate on a public RF modulation dataset.
+
+## Five-Seed Reproducibility Study
+
+The baseline architecture was trained independently using five random seeds:
+
+```text
+2026, 2027, 2028, 2029, 2030
+```
+
+For every run, the checkpoint with the highest validation accuracy was evaluated on the same untouched test split.
+
+### Aggregate Held-Out Test Accuracy
+
+| Metric | Result |
+|---|---:|
+| Mean test accuracy | 94.24% |
+| Standard deviation | 0.29 percentage points |
+| Minimum | 93.93% |
+| Maximum | 94.71% |
+
+Individual test accuracies:
+
+| Seed | Test accuracy |
+|---:|---:|
+| 2026 | 94.14% |
+| 2027 | 94.71% |
+| 2028 | 94.00% |
+| 2029 | 94.43% |
+| 2030 | 93.93% |
+
+The narrow range confirms that the original baseline result was not caused by a favorable random seed.
+
+### Mean Per-Class Accuracy
+
+| Modulation | Mean accuracy | Standard deviation |
+|---|---:|---:|
+| BPSK | 99.77% | 0.33 percentage points |
+| QPSK | 87.77% | 2.32 percentage points |
+| 8PSK | 93.09% | 3.15 percentage points |
+| 16QAM | 96.34% | 1.72 percentage points |
+
+BPSK is essentially solved under the current synthetic distribution. QPSK and 8PSK show the greatest variation across independently trained models.
+
+### Mean Accuracy by SNR
+
+| SNR | Mean accuracy | Standard deviation |
+|---:|---:|---:|
+| -4 dB | 70.50% | 1.10 percentage points |
+| 0 dB | 94.60% | 1.07 percentage points |
+| 4 dB | 99.10% | 0.37 percentage points |
+| 8 dB | 98.50% | 0.45 percentage points |
+| 12 dB | 99.30% | 0.24 percentage points |
+| 16 dB | 97.90% | 0.20 percentage points |
+| 20 dB | 99.80% | 0.24 percentage points |
+
+The persistent bottleneck is the -4 dB condition. Increasing model capacity without directly addressing low-SNR phase discrimination would be undirected architecture tuning.
+
+### Five-Seed Test Figure
+
+![Baseline CNN five-seed test evaluation](figures/baseline_cnn_seed_sweep_v1_test.png)
+
+### Training Stability
+
+Best validation accuracy was stable across seeds:
+
+```text
+94.17% ± 0.31 percentage points
+```
+
+Final-epoch validation accuracy was substantially less stable:
+
+```text
+88.39% ± 4.13 percentage points
+```
+
+This means model capability is repeatable, but the training trajectory is unstable. Best-checkpoint selection is currently essential. Reporting only the final epoch would significantly understate performance for several seeds.
+
+### Revised Baseline Claim
+
+The defensible baseline result is:
+
+```text
+94.24% ± 0.29 percentage points held-out test accuracy across five independent training seeds
+```
+
+This replaces the weaker single-run claim of 94.14%.
