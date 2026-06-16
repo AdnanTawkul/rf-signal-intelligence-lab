@@ -1,0 +1,29 @@
+experiment_name: baseline_cnn_rms_v1
+seed: 2026
+
+dataset:
+  train_path: data/processed/rf_modulation_baseline_v1/train.npz
+  validation_path: data/processed/rf_modulation_baseline_v1/validation.npz
+
+model:
+  in_channels: 2
+  num_classes: 4
+  channels:
+    - 32
+    - 64
+    - 128
+  kernel_size: 7
+  dropout: 0.20
+  normalize_input_rms: true
+
+training:
+  epochs: 30
+  batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  num_workers: 0
+  pin_memory: true
+
+output:
+  directory: results/baseline_cnn_rms_v1
+  figure_path: reports/figures/baseline_cnn_rms_v1_training.png
