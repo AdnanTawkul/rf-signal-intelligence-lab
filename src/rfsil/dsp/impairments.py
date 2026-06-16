@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from numbers import Integral
+
 import numpy as np
 from numpy.typing import ArrayLike
 
@@ -27,22 +29,7 @@ def add_awgn(
     snr_db: float,
     seed: int | None = None,
 ) -> ComplexArray:
-    """Add complex white Gaussian noise at a requested signal-to-noise ratio.
-
-    Signal and noise power are measured in the complex baseband domain. Noise
-    power is divided equally between the in-phase and quadrature components.
-
-    Args:
-        samples: One-dimensional complex IQ signal.
-        snr_db: Requested signal-to-noise ratio in decibels.
-        seed: Optional random seed for reproducibility.
-
-    Returns:
-        Noisy complex IQ samples with dtype ``complex64``.
-
-    Raises:
-        ValueError: If the input signal or requested SNR is invalid.
-    """
+    """Add complex white Gaussian noise at a requested signal-to-noise ratio."""
     iq = _validate_iq_samples(samples)
 
     if not np.isfinite(snr_db):
@@ -75,18 +62,7 @@ def apply_phase_offset(
     samples: ArrayLike,
     phase_offset_rad: float,
 ) -> ComplexArray:
-    """Apply a constant carrier phase offset to IQ samples.
-
-    Args:
-        samples: One-dimensional complex IQ signal.
-        phase_offset_rad: Constant phase rotation in radians.
-
-    Returns:
-        Phase-rotated complex IQ samples with dtype ``complex64``.
-
-    Raises:
-        ValueError: If the input signal or phase offset is invalid.
-    """
+    """Apply a constant carrier phase offset to IQ samples."""
     iq = _validate_iq_samples(samples)
 
     if not np.isfinite(phase_offset_rad):
@@ -97,25 +73,11 @@ def apply_phase_offset(
     return (iq * phase_rotation).astype(np.complex64)
 
 
-
 def apply_amplitude_scaling(
     samples: ArrayLike,
     amplitude_scale: float,
 ) -> ComplexArray:
-    """Apply a positive linear amplitude scale to complex IQ samples.
-
-    Args:
-        samples: One-dimensional complex IQ signal.
-        amplitude_scale: Positive linear amplitude multiplier. A value above
-            one increases signal amplitude, while a value between zero and one
-            attenuates it.
-
-    Returns:
-        Amplitude-scaled complex IQ samples with dtype ``complex64``.
-
-    Raises:
-        ValueError: If the input signal or amplitude scale is invalid.
-    """
+    """Apply a positive linear amplitude scale to complex IQ samples."""
     iq = _validate_iq_samples(samples)
 
     if not np.isfinite(amplitude_scale) or amplitude_scale <= 0.0:
@@ -124,31 +86,58 @@ def apply_amplitude_scaling(
     return (iq * np.float32(amplitude_scale)).astype(np.complex64)
 
 
+def apply_time_shift(
+    samples: ArrayLike,
+    shift_samples: int,
+) -> ComplexArray:
+    """Apply a zero-padded integer time shift to IQ samples.
+
+    Positive shifts delay the signal by inserting zeros at the beginning.
+    Negative shifts advance the signal by inserting zeros at the end. The
+    output always has the same length as the input and does not wrap samples
+    around circularly.
+
+    Args:
+        samples: One-dimensional complex IQ signal.
+        shift_samples: Integer sample displacement. Positive values delay the
+            signal and negative values advance it.
+
+    Returns:
+        Shifted complex IQ samples with the same shape and ``complex64`` dtype.
+
+    Raises:
+        ValueError: If the signal is invalid or shift_samples is not an integer.
+    """
+    iq = _validate_iq_samples(samples)
+
+    if isinstance(shift_samples, bool) or not isinstance(shift_samples, Integral):
+        raise ValueError("shift_samples must be an integer.")
+
+    shift = int(shift_samples)
+    shifted = np.zeros_like(iq)
+
+    if shift == 0:
+        return iq.copy()
+
+    if abs(shift) >= iq.size:
+        return shifted
+
+    if shift > 0:
+        shifted[shift:] = iq[:-shift]
+    else:
+        advance = -shift
+        shifted[:-advance] = iq[advance:]
+
+    return shifted
+
+
 def apply_frequency_offset(
     samples: ArrayLike,
     frequency_offset_hz: float,
     sample_rate_hz: float,
     initial_phase_rad: float = 0.0,
 ) -> ComplexArray:
-    """Apply a carrier frequency and initial phase offset to IQ samples.
-
-    The complex baseband signal is multiplied by a rotating phasor:
-
-        exp(j * (2 * pi * frequency_offset_hz * n / sample_rate_hz
-                 + initial_phase_rad))
-
-    Args:
-        samples: One-dimensional complex IQ signal.
-        frequency_offset_hz: Carrier frequency offset in hertz.
-        sample_rate_hz: IQ sample rate in hertz.
-        initial_phase_rad: Initial carrier phase offset in radians.
-
-    Returns:
-        Frequency-shifted complex IQ samples with dtype ``complex64``.
-
-    Raises:
-        ValueError: If the samples or parameters are invalid.
-    """
+    """Apply a carrier frequency and initial phase offset to IQ samples."""
     iq = _validate_iq_samples(samples)
 
     if not np.isfinite(frequency_offset_hz):
@@ -176,4 +165,5 @@ __all__ = [
     "apply_amplitude_scaling",
     "apply_frequency_offset",
     "apply_phase_offset",
+    "apply_time_shift",
 ]
