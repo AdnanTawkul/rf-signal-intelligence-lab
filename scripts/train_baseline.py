@@ -162,6 +162,9 @@ def main() -> None:
         ),
         kernel_size=int(model_content["kernel_size"]),
         dropout=float(model_content["dropout"]),
+        normalize_input_rms=bool(
+            model_content.get("normalize_input_rms", False)
+        ),
     )
 
     model = BaselineIQCNN(model_configuration).to(device)

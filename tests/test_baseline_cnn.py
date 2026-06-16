@@ -108,3 +108,45 @@ def test_baseline_cnn_config_rejects_invalid_values(
         BaselineCNNConfig(
             **invalid_configuration,  # type: ignore[arg-type]
         )
+
+
+def test_rms_normalized_model_is_invariant_to_positive_gain() -> None:
+    torch.manual_seed(42)
+
+    model = BaselineIQCNN(
+        BaselineCNNConfig(
+            normalize_input_rms=True,
+        )
+    )
+    model.eval()
+
+    inputs = torch.randn(4, 2, 512)
+
+    with torch.inference_mode():
+        original_logits = model(inputs)
+        scaled_logits = model(inputs * 3.7)
+
+    torch.testing.assert_close(
+        original_logits,
+        scaled_logits,
+        rtol=1e-5,
+        atol=1e-6,
+    )
+
+
+def test_rms_normalized_model_rejects_zero_power_input() -> None:
+    model = BaselineIQCNN(
+        BaselineCNNConfig(
+            normalize_input_rms=True,
+        )
+    )
+
+    with pytest.raises(ValueError):
+        model(torch.zeros(2, 2, 256))
+
+
+def test_baseline_config_rejects_nonboolean_rms_setting() -> None:
+    with pytest.raises(ValueError):
+        BaselineCNNConfig(
+            normalize_input_rms=1,  # type: ignore[arg-type]
+        )

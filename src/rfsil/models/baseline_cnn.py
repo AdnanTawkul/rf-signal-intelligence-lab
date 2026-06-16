@@ -5,6 +5,8 @@ from numbers import Integral
 
 from torch import Tensor, nn
 
+from rfsil.data.transforms import normalize_iq_rms
+
 
 def _validate_positive_integer(value: object, name: str) -> int:
     """Validate and return a strictly positive integer."""
@@ -28,6 +30,7 @@ class BaselineCNNConfig:
     channels: tuple[int, ...] = (32, 64, 128)
     kernel_size: int = 7
     dropout: float = 0.20
+    normalize_input_rms: bool = False
 
     def __post_init__(self) -> None:
         """Validate model architecture settings."""
@@ -50,6 +53,9 @@ class BaselineCNNConfig:
 
         if not 0.0 <= self.dropout < 1.0:
             raise ValueError("dropout must be in the interval [0, 1).")
+
+        if not isinstance(self.normalize_input_rms, bool):
+            raise ValueError("normalize_input_rms must be a boolean.")
 
 
 class _ConvBlock(nn.Module):
@@ -145,7 +151,13 @@ class BaselineIQCNN(nn.Module):
                 f"inputs must contain at least {minimum_sample_count} samples."
             )
 
-        features = self.features(inputs)
+        model_inputs = (
+            normalize_iq_rms(inputs)
+            if self.configuration.normalize_input_rms
+            else inputs
+        )
+
+        features = self.features(model_inputs)
         pooled = self.global_pool(features).squeeze(-1)
 
         return self.classifier(pooled)
