@@ -131,6 +131,41 @@ def apply_time_shift(
     return shifted
 
 
+
+def apply_flat_rayleigh_fading(
+    samples: ArrayLike,
+    seed: int | None = None,
+) -> ComplexArray:
+    """Apply flat Rayleigh block fading to complex IQ samples.
+
+    One complex channel coefficient is drawn for the complete IQ capture:
+
+        h = (x + j*y) / sqrt(2), where x and y are standard normal variables.
+
+    The same coefficient multiplies every sample, producing a constant gain and
+    phase change across the signal block.
+
+    Args:
+        samples: One-dimensional complex IQ signal.
+        seed: Optional random seed for reproducibility.
+
+    Returns:
+        Faded complex IQ samples with dtype ``complex64``.
+    """
+    iq = _validate_iq_samples(samples)
+    rng = np.random.default_rng(seed)
+
+    channel_coefficient = np.complex64(
+        (
+            rng.normal(0.0, 1.0)
+            + 1j * rng.normal(0.0, 1.0)
+        )
+        / np.sqrt(2.0)
+    )
+
+    return (iq * channel_coefficient).astype(np.complex64)
+
+
 def apply_frequency_offset(
     samples: ArrayLike,
     frequency_offset_hz: float,
@@ -163,6 +198,7 @@ def apply_frequency_offset(
 __all__ = [
     "add_awgn",
     "apply_amplitude_scaling",
+    "apply_flat_rayleigh_fading",
     "apply_frequency_offset",
     "apply_phase_offset",
     "apply_time_shift",
