@@ -1,9 +1,9 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from rfsil.dsp.impairments import add_awgn, apply_frequency_offset
+from rfsil.dsp.impairments import add_awgn, apply_frequency_offset, apply_phase_offset
 
 
 def test_add_awgn_preserves_shape_and_dtype() -> None:
@@ -170,3 +170,72 @@ def test_frequency_offset_rejects_invalid_parameters(
             sample_rate_hz=sample_rate_hz,
             initial_phase_rad=initial_phase_rad,
         )
+
+
+def test_phase_offset_preserves_shape_dtype_and_magnitude() -> None:
+    samples = np.array(
+        [1.0 + 0.0j, 0.5 + 0.5j, -1.0 + 0.25j],
+        dtype=np.complex64,
+    )
+
+    shifted = apply_phase_offset(samples, phase_offset_rad=np.pi / 3.0)
+
+    assert shifted.shape == samples.shape
+    assert shifted.dtype == np.complex64
+    np.testing.assert_allclose(
+        np.abs(shifted),
+        np.abs(samples),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+
+
+def test_phase_offset_produces_known_quarter_turn() -> None:
+    samples = np.array(
+        [1.0 + 0.0j, 0.0 + 1.0j, -1.0 + 0.0j],
+        dtype=np.complex64,
+    )
+
+    shifted = apply_phase_offset(samples, phase_offset_rad=np.pi / 2.0)
+
+    expected = np.array(
+        [0.0 + 1.0j, -1.0 + 0.0j, 0.0 - 1.0j],
+        dtype=np.complex64,
+    )
+
+    np.testing.assert_allclose(shifted, expected, atol=1e-6)
+
+
+def test_zero_phase_offset_preserves_signal() -> None:
+    samples = np.array(
+        [1.0 + 1.0j, -0.5 + 0.25j, 0.1 - 0.8j],
+        dtype=np.complex64,
+    )
+
+    shifted = apply_phase_offset(samples, phase_offset_rad=0.0)
+
+    np.testing.assert_array_equal(shifted, samples)
+
+
+@pytest.mark.parametrize(
+    "invalid_samples",
+    [
+        np.array([], dtype=np.complex64),
+        np.ones((4, 4), dtype=np.complex64),
+        np.array([1.0 + 0.0j, complex(float("nan"), 0.0)], dtype=np.complex64),
+    ],
+)
+def test_phase_offset_rejects_invalid_samples(invalid_samples: np.ndarray) -> None:
+    with pytest.raises(ValueError):
+        apply_phase_offset(invalid_samples, phase_offset_rad=np.pi / 4.0)
+
+
+@pytest.mark.parametrize(
+    "invalid_phase",
+    [float("nan"), float("inf"), float("-inf")],
+)
+def test_phase_offset_rejects_nonfinite_phase(invalid_phase: float) -> None:
+    samples = np.ones(128, dtype=np.complex64)
+
+    with pytest.raises(ValueError):
+        apply_phase_offset(samples, phase_offset_rad=invalid_phase)

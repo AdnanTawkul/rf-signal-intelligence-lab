@@ -71,6 +71,32 @@ def add_awgn(
     return (iq + noise).astype(np.complex64)
 
 
+def apply_phase_offset(
+    samples: ArrayLike,
+    phase_offset_rad: float,
+) -> ComplexArray:
+    """Apply a constant carrier phase offset to IQ samples.
+
+    Args:
+        samples: One-dimensional complex IQ signal.
+        phase_offset_rad: Constant phase rotation in radians.
+
+    Returns:
+        Phase-rotated complex IQ samples with dtype ``complex64``.
+
+    Raises:
+        ValueError: If the input signal or phase offset is invalid.
+    """
+    iq = _validate_iq_samples(samples)
+
+    if not np.isfinite(phase_offset_rad):
+        raise ValueError("phase_offset_rad must be finite.")
+
+    phase_rotation = np.complex64(np.exp(1j * phase_offset_rad))
+
+    return (iq * phase_rotation).astype(np.complex64)
+
+
 def apply_frequency_offset(
     samples: ArrayLike,
     frequency_offset_hz: float,
@@ -121,4 +147,5 @@ def apply_frequency_offset(
 __all__ = [
     "add_awgn",
     "apply_frequency_offset",
+    "apply_phase_offset",
 ]
