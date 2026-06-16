@@ -83,3 +83,19 @@ rf-signal-intelligence-lab/
 ├── reports/
 │   └── figures/
 └── results/
+## Baseline CNN v1 Results
+
+The first held-out baseline was trained on 5,600 synthetic raw-IQ examples and evaluated on an untouched balanced test split containing 1,400 examples.
+
+- Overall test accuracy: **94.14%**
+- BPSK accuracy: **100.00%**
+- QPSK accuracy: **85.71%**
+- 8PSK accuracy: **94.86%**
+- 16QAM accuracy: **96.00%**
+- Accuracy at -4 dB: **70.50%**
+- Accuracy from 4 dB upward: **98.00% to 100.00%**
+- Worst class-SNR group: **QPSK at -4 dB, 40.00%**
+
+![Baseline CNN v1 accuracy by SNR](reports/figures/baseline_cnn_v1_accuracy_by_snr.png)
+
+The full methodology, confusion matrix, class-by-SNR analysis, limitations, and next research targets are documented in [Baseline CNN v1 Results](reports/baseline_cnn_v1.md).
