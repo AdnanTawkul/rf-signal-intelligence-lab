@@ -2,7 +2,7 @@
 
 A local, reproducible AI engineering project for RF modulation recognition from synthetic raw IQ signals.
 
-The repository covers the complete path from signal generation and channel simulation to PyTorch training, held-out evaluation, reproducibility analysis, and deployment-oriented extensions. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
+The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, and deployment-oriented extensions. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
 
 ## Current Status
 
@@ -18,59 +18,85 @@ The project currently includes:
 - IQ, constellation, waveform, and spectrogram visualizations
 - Reproducible balanced dataset generation
 - PyTorch `Dataset` and `DataLoader` integration
-- A compact one-dimensional CNN baseline
+- A compact one-dimensional CNN classifier
+- Configurable BatchNorm and GroupNorm support
+- Optional per-example RMS IQ normalization
 - GPU training on an NVIDIA RTX 4080 SUPER
 - Held-out evaluation by class and SNR
 - Confusion-matrix and class-by-SNR error analysis
 - Five-seed training and test reproducibility studies
+- RMS-normalization and GroupNorm ablations
 - Automated tests with `pytest`
 - Static analysis with Ruff
 
-The next research milestones are self-supervised representation learning, uncertainty calibration, ONNX export, local latency benchmarking, and a Streamlit demo.
+The selected supervised model now uses GroupNorm. The next major research milestones are self-supervised representation learning, uncertainty calibration, public-dataset validation, ONNX export, local latency benchmarking, and a Streamlit demo.
 
-## Baseline Result
+## Selected Supervised Baseline
 
-The statistically defensible Baseline CNN v1 result is:
+The statistically defensible selected result is:
 
-> **94.24% ± 0.29 percentage points held-out test accuracy across five independent training seeds**
+> **95.29% ± 0.45 percentage points held-out test accuracy across five independent training seeds**
 
-Five independently trained checkpoints were evaluated on the same untouched test split.
+Five independently trained GroupNorm checkpoints were evaluated on the same untouched balanced test split.
 
 | Metric | Result |
 |---|---:|
-| Mean test accuracy | 94.24% |
-| Standard deviation | 0.29 percentage points |
-| Minimum test accuracy | 93.93% |
-| Maximum test accuracy | 94.71% |
-| Mean accuracy at -4 dB | 70.50% |
+| Mean test accuracy | 95.29% |
+| Standard deviation | 0.45 percentage points |
+| Minimum test accuracy | 94.71% |
+| Maximum test accuracy | 96.07% |
+| Mean accuracy at -4 dB | 74.90% |
 | Test examples per run | 1,400 |
 
 ### Mean Per-Class Accuracy Across Five Seeds
 
 | Modulation | Mean accuracy | Standard deviation |
 |---|---:|---:|
-| BPSK | 99.77% | 0.33 percentage points |
-| QPSK | 87.77% | 2.32 percentage points |
-| 8PSK | 93.09% | 3.15 percentage points |
-| 16QAM | 96.34% | 1.72 percentage points |
+| BPSK | 99.89% | 0.23 percentage points |
+| QPSK | 92.23% | 2.05 percentage points |
+| 8PSK | 89.94% | 2.74 percentage points |
+| 16QAM | 99.09% | 0.66 percentage points |
 
 ### Mean Accuracy by SNR Across Five Seeds
 
 | SNR | Mean accuracy | Standard deviation |
 |---:|---:|---:|
-| -4 dB | 70.50% | 1.10 percentage points |
-| 0 dB | 94.60% | 1.07 percentage points |
-| 4 dB | 99.10% | 0.37 percentage points |
-| 8 dB | 98.50% | 0.45 percentage points |
-| 12 dB | 99.30% | 0.24 percentage points |
-| 16 dB | 97.90% | 0.20 percentage points |
-| 20 dB | 99.80% | 0.24 percentage points |
+| -4 dB | 74.90% | 2.58 percentage points |
+| 0 dB | 93.40% | 1.07 percentage points |
+| 4 dB | 99.40% | 0.37 percentage points |
+| 8 dB | 99.80% | 0.24 percentage points |
+| 12 dB | 99.90% | 0.20 percentage points |
+| 16 dB | 99.90% | 0.20 percentage points |
+| 20 dB | 99.70% | 0.60 percentage points |
 
-![Baseline CNN five-seed evaluation](reports/figures/baseline_cnn_seed_sweep_v1_test.png)
+![GroupNorm five-seed held-out evaluation](reports/figures/baseline_cnn_groupnorm_seed_sweep_v1_test.png)
 
-The dominant weakness is low-SNR phase discrimination. QPSK at -4 dB was the worst class-SNR group in the original baseline analysis.
+Detailed methodology, BatchNorm results, RMS-normalization ablation, GroupNorm comparison, limitations, and five-seed evidence are documented in [Baseline CNN v1 Results](reports/baseline_cnn_v1.md).
 
-Detailed methodology, single-run metrics, confusion analysis, limitations, and five-seed results are documented in [Baseline CNN v1 Results](reports/baseline_cnn_v1.md).
+## Why GroupNorm Was Selected
+
+The original BatchNorm baseline achieved:
+
+```text
+94.24% ± 0.29 percentage points
+```
+
+The GroupNorm variant improved the five-seed mean test accuracy to:
+
+```text
+95.29% ± 0.45 percentage points
+```
+
+It also improved:
+
+- Mean QPSK accuracy by 4.46 percentage points
+- Mean 16QAM accuracy by 2.75 percentage points
+- Mean accuracy at -4 dB by 4.40 percentage points
+- Worst-seed test accuracy by 0.78 percentage points
+- Mean final validation accuracy by 5.71 percentage points
+- Final-validation stability
+
+The tradeoff is explicit. Mean 8PSK accuracy decreased by 3.15 percentage points, and overall test variance increased slightly. GroupNorm is therefore selected as the stronger overall baseline, not presented as uniformly superior in every class.
 
 ## Signal and Dataset Pipeline
 
@@ -97,11 +123,11 @@ The model input format is:
 - Channel 1: quadrature component
 - Default baseline sample length: 2,048 samples
 
-The generated dataset format also stores labels and impairment metadata, including SNR, frequency offset, phase offset, amplitude scale, timing shift, fading state, and generation seed.
+The generated dataset stores labels and impairment metadata, including SNR, frequency offset, phase offset, amplitude scale, timing shift, fading state, and generation seed.
 
-## Baseline Model
+## Selected Model
 
-Baseline CNN v1 is a compact one-dimensional convolutional classifier.
+The selected supervised model is a compact one-dimensional CNN.
 
 ```text
 Input: [batch, 2, 2048]
@@ -117,7 +143,7 @@ Linear classifier: 128 → 4
 Each convolutional block contains:
 
 - `Conv1d`
-- Batch normalization
+- GroupNorm with 8 groups
 - GELU activation
 - Max pooling
 
@@ -127,35 +153,49 @@ Trainable parameters:
 73,092
 ```
 
+RMS input normalization remains implemented as an optional checkpointed setting, but it is disabled in the selected model because the five-seed ablation reduced mean test accuracy and increased variance.
+
 ## Reproducibility Findings
 
-Best-checkpoint validation performance was stable across five seeds:
+### GroupNorm Validation Performance
+
+Best-checkpoint validation accuracy across five seeds:
 
 ```text
-94.17% ± 0.31 percentage points
+95.64% ± 0.40 percentage points
 ```
 
-Final-epoch validation performance was much less stable:
+Final-epoch validation accuracy across five seeds:
 
 ```text
-88.39% ± 4.13 percentage points
+94.10% ± 2.34 percentage points
 ```
 
-This distinction matters. The architecture learns repeatable features, but the training trajectory can become unstable late in training. Best-validation checkpoint selection is therefore part of the current experimental protocol.
+### BatchNorm Comparison
 
-## Visual Results
+The earlier BatchNorm model produced:
 
-### Held-Out Confusion Matrix
+```text
+Best validation: 94.17% ± 0.31 percentage points
+Final validation: 88.39% ± 4.13 percentage points
+```
 
-![Baseline CNN v1 confusion matrix](reports/figures/baseline_cnn_v1_confusion_matrix.png)
+GroupNorm substantially improved late-training behavior and reduced the dependence on unstable BatchNorm running statistics. Best-checkpoint selection is still retained as the experimental protocol.
 
-### Accuracy by SNR
+## RMS Normalization Ablation
 
-![Baseline CNN v1 accuracy by SNR](reports/figures/baseline_cnn_v1_accuracy_by_snr.png)
+Per-example complex RMS normalization was tested without changing the dataset, architecture, optimizer, batch size, epoch count, or seeds.
 
-### Class-by-SNR Accuracy
+Its single-seed result looked promising, but the five-seed result was worse:
 
-![Baseline CNN v1 class-by-SNR accuracy](reports/figures/baseline_cnn_v1_class_snr_accuracy.png)
+| Metric | BatchNorm baseline | RMS-normalized |
+|---|---:|---:|
+| Mean test accuracy | 94.24% | 93.93% |
+| Test standard deviation | 0.29 pp | 0.80 pp |
+| Minimum test accuracy | 93.93% | 92.43% |
+| Mean accuracy at -4 dB | 70.50% | 68.90% |
+
+RMS normalization is therefore retained as an ablation and optional feature, not used as the default preprocessing path.
 
 ## Quick Start
 
@@ -205,7 +245,7 @@ Expected hardware in the original development environment:
 NVIDIA GeForce RTX 4080 SUPER
 ```
 
-## Reproduce the Baseline
+## Reproduce the Selected GroupNorm Baseline
 
 ### Generate the baseline dataset
 
@@ -223,34 +263,44 @@ Expected split sizes:
 
 Generated datasets are stored under `data/processed/` and are intentionally excluded from Git.
 
-### Train Baseline CNN v1
+### Train one GroupNorm model
 
 ```powershell
-python scripts\train_baseline.py --config configs\train_baseline_v1.yaml
+python scripts\train_baseline.py --config configs\train_baseline_groupnorm_v1.yaml
 ```
 
-### Evaluate the selected baseline checkpoint
+### Evaluate the selected GroupNorm checkpoint
 
 ```powershell
-python scripts\evaluate_baseline.py --config configs\evaluate_baseline_v1.yaml
+python scripts\evaluate_baseline.py --config configs\evaluate_baseline_groupnorm_v1.yaml
 ```
 
-### Run class-by-SNR error analysis
+### Run the five-seed GroupNorm training study
 
 ```powershell
-python scripts\analyze_baseline_errors.py --config configs\analyze_baseline_v1.yaml
+python scripts\run_baseline_seed_sweep.py --config configs\baseline_groupnorm_seed_sweep_v1.yaml
 ```
 
-### Run the five-seed training study
+### Evaluate all five GroupNorm checkpoints
+
+```powershell
+python scripts\evaluate_seed_sweep.py --config configs\evaluate_groupnorm_seed_sweep_v1.yaml
+```
+
+## Reproduce Historical Ablations
+
+### BatchNorm five-seed study
 
 ```powershell
 python scripts\run_baseline_seed_sweep.py --config configs\baseline_seed_sweep_v1.yaml
+python scripts\evaluate_seed_sweep.py --config configs\evaluate_seed_sweep_v1.yaml
 ```
 
-### Evaluate all five checkpoints on the held-out test split
+### RMS-normalized five-seed study
 
 ```powershell
-python scripts\evaluate_seed_sweep.py --config configs\evaluate_seed_sweep_v1.yaml
+python scripts\run_baseline_seed_sweep.py --config configs\baseline_rms_seed_sweep_v1.yaml
+python scripts\evaluate_seed_sweep.py --config configs\evaluate_rms_seed_sweep_v1.yaml
 ```
 
 ## Quality Checks
@@ -273,7 +323,7 @@ Check whitespace and patch integrity:
 git diff --check
 ```
 
-At the current baseline milestone, the repository contains 196 passing tests.
+At the current milestone, the repository contains **223 passing tests**.
 
 ## Repository Structure
 
@@ -342,10 +392,11 @@ It does not include:
 - Training and test data come from the same signal-generator family.
 - Real receiver effects and hardware-specific distortions are not yet represented fully.
 - Public RF datasets have not yet been integrated.
-- Low-SNR QPSK and 8PSK discrimination remains the main model weakness.
+- Low-SNR classification remains the dominant failure regime.
+- GroupNorm improves QPSK and 16QAM but reduces mean 8PSK accuracy.
 - Confidence calibration and uncertainty estimation are not yet implemented.
-- The baseline still relies on BatchNorm and best-checkpoint selection because final-epoch validation behavior is unstable.
-- No self-supervised or architecture-ablation result has been completed yet.
+- No self-supervised representation-learning result is available yet.
+- Deployment benchmarking and ONNX export are not yet implemented.
 
 ## Roadmap
 
@@ -365,11 +416,14 @@ It does not include:
 - [x] Accuracy-by-SNR analysis
 - [x] Class-by-SNR error analysis
 - [x] Five-seed reproducibility study
+- [x] RMS-normalization ablation
+- [x] BatchNorm versus GroupNorm ablation
+- [x] GroupNorm baseline selection
 - [x] Automated testing and Ruff checks
 
 ### Next
 
-- [ ] GroupNorm and normalization ablations
+- [ ] Investigate the GroupNorm 8PSK regression
 - [ ] Low-SNR-aware training experiments
 - [ ] Confidence calibration
 - [ ] Uncertainty estimation
