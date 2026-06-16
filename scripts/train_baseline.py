@@ -43,6 +43,30 @@ def parse_arguments() -> argparse.Namespace:
         type=Path,
         default=Path("configs/train_baseline_smoke.yaml"),
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Override the seed stored in the YAML configuration.",
+    )
+    parser.add_argument(
+        "--experiment-name",
+        type=str,
+        default=None,
+        help="Override the experiment name.",
+    )
+    parser.add_argument(
+        "--output-directory",
+        type=Path,
+        default=None,
+        help="Override the result output directory.",
+    )
+    parser.add_argument(
+        "--figure-path",
+        type=Path,
+        default=None,
+        help="Override the training-curve output path.",
+    )
 
     return parser.parse_args()
 
@@ -57,7 +81,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
     return content
 
 
-def resolve_project_path(path_value: str) -> Path:
+def resolve_project_path(path_value: str | Path) -> Path:
     """Resolve a project-relative path."""
     path = Path(path_value)
 
@@ -66,23 +90,31 @@ def resolve_project_path(path_value: str) -> Path:
 
 def main() -> None:
     arguments = parse_arguments()
-    config_path = resolve_project_path(str(arguments.config))
+    config_path = resolve_project_path(arguments.config)
     content = load_yaml(config_path)
 
-    experiment_name = str(content["experiment_name"])
-    seed = int(content["seed"])
-
-    training_config = content["training"]
+    training_content = content["training"]
     model_content = content["model"]
     dataset_content = content["dataset"]
     output_content = content["output"]
 
-    epochs = int(training_config["epochs"])
-    batch_size = int(training_config["batch_size"])
-    learning_rate = float(training_config["learning_rate"])
-    weight_decay = float(training_config["weight_decay"])
-    num_workers = int(training_config["num_workers"])
-    pin_memory = bool(training_config["pin_memory"])
+    experiment_name = (
+        arguments.experiment_name
+        if arguments.experiment_name is not None
+        else str(content["experiment_name"])
+    )
+    seed = (
+        int(arguments.seed)
+        if arguments.seed is not None
+        else int(content["seed"])
+    )
+
+    epochs = int(training_content["epochs"])
+    batch_size = int(training_content["batch_size"])
+    learning_rate = float(training_content["learning_rate"])
+    weight_decay = float(training_content["weight_decay"])
+    num_workers = int(training_content["num_workers"])
+    pin_memory = bool(training_content["pin_memory"])
 
     if epochs <= 0:
         raise ValueError("epochs must be positive.")
@@ -140,14 +172,25 @@ def main() -> None:
         weight_decay=weight_decay,
     )
 
-    output_directory = resolve_project_path(
-        output_content["directory"]
+    output_directory_value = (
+        arguments.output_directory
+        if arguments.output_directory is not None
+        else Path(str(output_content["directory"]))
     )
-    output_directory.mkdir(parents=True, exist_ok=True)
+    figure_path_value = (
+        arguments.figure_path
+        if arguments.figure_path is not None
+        else Path(str(output_content["figure_path"]))
+    )
 
-    figure_path = resolve_project_path(
-        output_content["figure_path"]
+    output_directory = resolve_project_path(
+        output_directory_value
     )
+    figure_path = resolve_project_path(
+        figure_path_value
+    )
+
+    output_directory.mkdir(parents=True, exist_ok=True)
     figure_path.parent.mkdir(parents=True, exist_ok=True)
 
     history: list[dict[str, float | int]] = []
@@ -156,6 +199,7 @@ def main() -> None:
     best_model_state: dict[str, torch.Tensor] | None = None
 
     print(f"Experiment: {experiment_name}")
+    print(f"Seed: {seed}")
     print(f"Device: {device}")
     print(f"Train examples: {len(train_dataset)}")
     print(f"Validation examples: {len(validation_dataset)}")
@@ -209,6 +253,7 @@ def main() -> None:
 
     checkpoint_path = output_directory / "best_model.pt"
     history_path = output_directory / "history.json"
+    summary_path = output_directory / "summary.json"
 
     torch.save(
         {
@@ -229,6 +274,36 @@ def main() -> None:
 
     history_path.write_text(
         json.dumps(history, indent=2),
+        encoding="utf-8",
+    )
+
+    final_record = history[-1]
+
+    summary = {
+        "format_version": 1,
+        "experiment_name": experiment_name,
+        "seed": seed,
+        "epochs": epochs,
+        "best_epoch": best_epoch,
+        "best_validation_accuracy": best_validation_accuracy,
+        "final_train_loss": float(final_record["train_loss"]),
+        "final_train_accuracy": float(final_record["train_accuracy"]),
+        "final_validation_loss": float(
+            final_record["validation_loss"]
+        ),
+        "final_validation_accuracy": float(
+            final_record["validation_accuracy"]
+        ),
+        "checkpoint_path": str(
+            checkpoint_path.relative_to(PROJECT_ROOT)
+        ),
+        "history_path": str(
+            history_path.relative_to(PROJECT_ROOT)
+        ),
+    }
+
+    summary_path.write_text(
+        json.dumps(summary, indent=2),
         encoding="utf-8",
     )
 
@@ -292,7 +367,7 @@ def main() -> None:
     axes[1].grid(True, alpha=0.3)
     axes[1].legend()
 
-    figure.suptitle("Baseline CNN Smoke Training")
+    figure.suptitle(f"{experiment_name} | seed={seed}")
     figure.tight_layout()
     figure.savefig(figure_path, dpi=160)
     plt.close(figure)
@@ -300,10 +375,11 @@ def main() -> None:
     print(f"Best epoch: {best_epoch}")
     print(
         "Best validation accuracy: "
-        f"{best_validation_accuracy:.3f}"
+        f"{best_validation_accuracy:.4f}"
     )
     print(f"Checkpoint: {checkpoint_path}")
     print(f"History: {history_path}")
+    print(f"Summary: {summary_path}")
     print(f"Figure: {figure_path}")
 
 
