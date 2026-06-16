@@ -150,3 +150,83 @@ def test_baseline_config_rejects_nonboolean_rms_setting() -> None:
         BaselineCNNConfig(
             normalize_input_rms=1,  # type: ignore[arg-type]
         )
+
+
+def test_group_norm_model_returns_expected_logits_shape() -> None:
+    model = BaselineIQCNN(
+        BaselineCNNConfig(
+            normalization="group",
+            group_norm_groups=8,
+        )
+    )
+    inputs = torch.randn(5, 2, 512)
+
+    logits = model(inputs)
+
+    assert logits.shape == (5, 4)
+
+
+def test_group_norm_preserves_trainable_parameter_count() -> None:
+    model = BaselineIQCNN(
+        BaselineCNNConfig(
+            normalization="group",
+            group_norm_groups=8,
+        )
+    )
+
+    assert count_trainable_parameters(model) == 73_092
+
+
+def test_group_norm_has_identical_train_and_eval_behavior_without_dropout(
+) -> None:
+    torch.manual_seed(42)
+
+    model = BaselineIQCNN(
+        BaselineCNNConfig(
+            normalization="group",
+            group_norm_groups=8,
+            dropout=0.0,
+        )
+    )
+    inputs = torch.randn(4, 2, 512)
+
+    model.train()
+
+    with torch.inference_mode():
+        training_logits = model(inputs)
+
+    model.eval()
+
+    with torch.inference_mode():
+        evaluation_logits = model(inputs)
+
+    torch.testing.assert_close(
+        training_logits,
+        evaluation_logits,
+        rtol=1e-6,
+        atol=1e-7,
+    )
+
+
+@pytest.mark.parametrize(
+    "invalid_configuration",
+    [
+        {"normalization": "layer"},
+        {"normalization": ""},
+        {
+            "normalization": "group",
+            "group_norm_groups": 0,
+        },
+        {
+            "normalization": "group",
+            "group_norm_groups": 7,
+        },
+    ],
+)
+def test_normalization_configuration_rejects_invalid_values(
+    invalid_configuration: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError):
+        BaselineCNNConfig(
+            **invalid_configuration,  # type: ignore[arg-type]
+        )

@@ -31,6 +31,8 @@ class BaselineCNNConfig:
     kernel_size: int = 7
     dropout: float = 0.20
     normalize_input_rms: bool = False
+    normalization: str = "batch"
+    group_norm_groups: int = 8
 
     def __post_init__(self) -> None:
         """Validate model architecture settings."""
@@ -57,6 +59,42 @@ class BaselineCNNConfig:
         if not isinstance(self.normalize_input_rms, bool):
             raise ValueError("normalize_input_rms must be a boolean.")
 
+        if self.normalization not in {"batch", "group"}:
+            raise ValueError(
+                "normalization must be either 'batch' or 'group'."
+            )
+
+        _validate_positive_integer(
+            self.group_norm_groups,
+            "group_norm_groups",
+        )
+
+        if self.normalization == "group":
+            for channel_count in self.channels:
+                if channel_count % self.group_norm_groups != 0:
+                    raise ValueError(
+                        "Every channel count must be divisible by "
+                        "group_norm_groups when using GroupNorm."
+                    )
+
+
+def _create_normalization_layer(
+    normalization: str,
+    channel_count: int,
+    group_norm_groups: int,
+) -> nn.Module:
+    """Create the configured channel-normalization layer."""
+    if normalization == "batch":
+        return nn.BatchNorm1d(channel_count)
+
+    if normalization == "group":
+        return nn.GroupNorm(
+            num_groups=group_norm_groups,
+            num_channels=channel_count,
+        )
+
+    raise ValueError(f"Unsupported normalization: {normalization}")
+
 
 class _ConvBlock(nn.Module):
     """Convolution, normalization, activation, and temporal downsampling."""
@@ -66,6 +104,8 @@ class _ConvBlock(nn.Module):
         in_channels: int,
         out_channels: int,
         kernel_size: int,
+        normalization: str,
+        group_norm_groups: int,
     ) -> None:
         super().__init__()
 
@@ -77,7 +117,11 @@ class _ConvBlock(nn.Module):
                 padding=kernel_size // 2,
                 bias=False,
             ),
-            nn.BatchNorm1d(out_channels),
+            _create_normalization_layer(
+                normalization=normalization,
+                channel_count=out_channels,
+                group_norm_groups=group_norm_groups,
+            ),
             nn.GELU(),
             nn.MaxPool1d(
                 kernel_size=2,
@@ -118,6 +162,10 @@ class BaselineIQCNN(nn.Module):
                     in_channels=current_channels,
                     out_channels=output_channels,
                     kernel_size=self.configuration.kernel_size,
+                    normalization=self.configuration.normalization,
+                    group_norm_groups=(
+                        self.configuration.group_norm_groups
+                    ),
                 )
             )
             current_channels = output_channels

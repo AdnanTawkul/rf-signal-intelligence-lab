@@ -84,6 +84,12 @@ def build_model_from_checkpoint(
         normalize_input_rms=bool(
             model_content.get("normalize_input_rms", False)
         ),
+        normalization=str(
+            model_content.get("normalization", "batch")
+        ),
+        group_norm_groups=int(
+            model_content.get("group_norm_groups", 8)
+        ),
     )
 
     model = BaselineIQCNN(configuration)
