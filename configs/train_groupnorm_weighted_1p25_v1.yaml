@@ -1,0 +1,35 @@
+experiment_name: baseline_cnn_groupnorm_weighted_1p25_v1
+seed: 2026
+dataset:
+  train_path: data/processed/rf_modulation_baseline_v1/train.npz
+  validation_path: data/processed/rf_modulation_baseline_v1/validation.npz
+model:
+  in_channels: 2
+  num_classes: 4
+  channels:
+  - 32
+  - 64
+  - 128
+  kernel_size: 7
+  dropout: 0.2
+  normalize_input_rms: false
+  normalization: group
+  group_norm_groups: 8
+training:
+  epochs: 30
+  batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  num_workers: 0
+  pin_memory: true
+  targeted_weighting:
+    enabled: true
+    target_class_index: 2
+    target_snr_values_db:
+    - -4.0
+    - 0.0
+    target_weight: 1.25
+    snr_tolerance: 0.0001
+output:
+  directory: results/baseline_cnn_groupnorm_weighted_1p25_v1
+  figure_path: reports/figures/baseline_cnn_groupnorm_weighted_1p25_v1_training.png
