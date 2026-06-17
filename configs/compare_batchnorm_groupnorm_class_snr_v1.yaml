@@ -1,0 +1,25 @@
+experiment_name: batchnorm_vs_groupnorm_class_snr_v1
+
+test_path: data/processed/rf_modulation_baseline_v1/test.npz
+
+seeds:
+  - 2026
+  - 2027
+  - 2028
+  - 2029
+  - 2030
+
+models:
+  batchnorm:
+    checkpoint_directory: results/baseline_cnn_seed_sweep_v1
+  groupnorm:
+    checkpoint_directory: results/baseline_cnn_groupnorm_seed_sweep_v1
+
+evaluation:
+  batch_size: 256
+  num_workers: 0
+  pin_memory: true
+
+output:
+  directory: results/batchnorm_vs_groupnorm_class_snr_v1
+  figure_path: reports/figures/batchnorm_vs_groupnorm_class_snr_v1.png
