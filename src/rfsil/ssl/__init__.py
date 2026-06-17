@@ -19,6 +19,11 @@ from rfsil.ssl.vicreg import (
     VICRegModel,
     compute_vicreg_loss,
 )
+from rfsil.ssl.vicreg_training import (
+    VICRegEpochMetrics,
+    run_vicreg_evaluation_epoch,
+    run_vicreg_training_epoch,
+)
 
 __all__ = [
     "ContrastiveEpochMetrics",
@@ -27,6 +32,7 @@ __all__ = [
     "ProjectionHeadConfig",
     "RandomIQAugmentation",
     "SimCLRModel",
+    "VICRegEpochMetrics",
     "VICRegLossConfig",
     "VICRegLossTerms",
     "VICRegModel",
@@ -34,4 +40,6 @@ __all__ = [
     "nt_xent_loss",
     "run_contrastive_evaluation_epoch",
     "run_contrastive_training_epoch",
+    "run_vicreg_evaluation_epoch",
+    "run_vicreg_training_epoch",
 ]
