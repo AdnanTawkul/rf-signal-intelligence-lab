@@ -1,0 +1,14 @@
+experiment_name: simclr_groupnorm_v1_linear_probe_test
+
+checkpoint_path: results/simclr_groupnorm_v1_linear_probe/best_model.pt
+test_path: data/processed/rf_modulation_baseline_v1/test.npz
+
+evaluation:
+  batch_size: 256
+  num_workers: 0
+  pin_memory: true
+
+output:
+  directory: results/simclr_groupnorm_v1_linear_probe_test
+  confusion_matrix_figure: reports/figures/simclr_groupnorm_v1_linear_probe_confusion_matrix.png
+  accuracy_by_snr_figure: reports/figures/simclr_groupnorm_v1_linear_probe_accuracy_by_snr.png
