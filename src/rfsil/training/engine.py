@@ -82,6 +82,7 @@ def run_training_epoch(
     optimizer: Optimizer,
     loss_function: nn.Module,
     device: torch.device,
+    metadata_loss_function: nn.Module | None = None,
 ) -> EpochMetrics:
     """Train a classification model for one complete epoch."""
     model.train()
@@ -96,7 +97,36 @@ def run_training_epoch(
         optimizer.zero_grad(set_to_none=True)
 
         logits = model(inputs)
-        loss = loss_function(logits, labels)
+
+        if metadata_loss_function is None:
+            loss = loss_function(logits, labels)
+        else:
+            if "snr_db" not in batch:
+                raise KeyError(
+                    "Metadata-aware training requires 'snr_db'."
+                )
+
+            snr_db = batch["snr_db"].to(
+                device=device,
+                dtype=torch.float32,
+                non_blocking=True,
+            )
+
+            if snr_db.ndim != 1:
+                raise ValueError(
+                    "Batch SNR values must have shape [batch]."
+                )
+
+            if snr_db.shape[0] != labels.shape[0]:
+                raise ValueError(
+                    "SNR and label batch sizes must match."
+                )
+
+            loss = metadata_loss_function(
+                logits,
+                labels,
+                snr_db,
+            )
 
         if not torch.isfinite(loss):
             raise RuntimeError("Training loss became non-finite.")
