@@ -1,0 +1,35 @@
+experiment_name: vicreg_groupnorm_v1_linear_probe
+source_ssl_checkpoint_path: results/vicreg_groupnorm_v1/best_model.pt
+class_names:
+- BPSK
+- QPSK
+- 8PSK
+- 16QAM
+dataset:
+  train_path: data/processed/rf_modulation_baseline_v1/train.npz
+  validation_path: data/processed/rf_modulation_baseline_v1/validation.npz
+linear_probe:
+  regularization_candidates:
+  - 0.001
+  - 0.003
+  - 0.01
+  - 0.03
+  - 0.1
+  - 0.3
+  - 1.0
+  - 3.0
+  - 10.0
+  - 30.0
+  - 100.0
+  - 300.0
+  - 1000.0
+  max_iter: 10000
+  random_state: 2026
+extraction:
+  batch_size: 256
+  num_workers: 0
+  pin_memory: true
+output:
+  directory: results/vicreg_groupnorm_v1_linear_probe
+  checkpoint_name: best_model.pt
+  summary_name: summary.json

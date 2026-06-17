@@ -322,9 +322,12 @@ def main() -> None:
             "SSL checkpoint must contain a mapping."
         )
 
-    if checkpoint.get("method") != "simclr":
+    source_ssl_method = checkpoint.get("method")
+
+    if source_ssl_method not in {"simclr", "vicreg"}:
         raise ValueError(
-            "Source checkpoint is not marked as SimCLR."
+            "Source checkpoint must be marked as "
+            "SimCLR or VICReg."
         )
 
     device = torch.device(
@@ -571,6 +574,7 @@ def main() -> None:
             ),
             "class_names": list(class_names),
             "seed": seed,
+            "source_ssl_method": source_ssl_method,
             "source_ssl_checkpoint": (
                 serialize_project_path(
                     source_checkpoint_path
@@ -593,6 +597,7 @@ def main() -> None:
         "format_version": 1,
         "experiment_name": experiment_name,
         "seed": seed,
+        "source_ssl_method": source_ssl_method,
         "source_ssl_checkpoint": (
             serialize_project_path(
                 source_checkpoint_path
