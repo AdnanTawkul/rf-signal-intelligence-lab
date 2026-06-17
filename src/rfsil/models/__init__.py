@@ -15,6 +15,10 @@ from rfsil.models.head_refit import (
 )
 
 __all__ = [
+    "fit_frozen_mlp_probe",
+    "FrozenMLPProbeFit",
+    "FrozenMLPProbeConfig",
+    "FrozenMLPProbe",
     "FrozenLinearHeadFit",
     "fit_frozen_linear_head",
     "LinearHeadParameters",
@@ -25,3 +29,10 @@ __all__ = [
     "BaselineIQCNN",
     "count_trainable_parameters",
 ]
+
+from rfsil.models.mlp_probe import (
+    FrozenMLPProbe,
+    FrozenMLPProbeConfig,
+    FrozenMLPProbeFit,
+    fit_frozen_mlp_probe,
+)
