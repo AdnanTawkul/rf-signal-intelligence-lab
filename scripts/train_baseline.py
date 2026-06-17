@@ -29,6 +29,7 @@ from rfsil.training.engine import (
     run_training_epoch,
     set_global_seed,
 )
+from rfsil.training.losses import ClassSNRWeightedCrossEntropyLoss
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -175,6 +176,94 @@ def main() -> None:
 
     model = BaselineIQCNN(model_configuration).to(device)
     loss_function = nn.CrossEntropyLoss()
+
+    targeted_weighting_content = training_content.get(
+        "targeted_weighting",
+        {},
+    )
+
+    if targeted_weighting_content is None:
+        targeted_weighting_content = {}
+
+    if not isinstance(targeted_weighting_content, dict):
+        raise ValueError(
+            "training.targeted_weighting must be a mapping."
+        )
+
+    enabled_value = targeted_weighting_content.get(
+        "enabled",
+        False,
+    )
+
+    if not isinstance(enabled_value, bool):
+        raise ValueError(
+            "training.targeted_weighting.enabled must be a boolean."
+        )
+
+    metadata_loss_function: nn.Module | None = None
+    targeted_weighting_configuration: dict[str, object] = {
+        "enabled": enabled_value,
+    }
+
+    if enabled_value:
+        required_fields = (
+            "target_class_index",
+            "target_snr_values_db",
+            "target_weight",
+        )
+        missing_fields = [
+            field
+            for field in required_fields
+            if field not in targeted_weighting_content
+        ]
+
+        if missing_fields:
+            raise ValueError(
+                "Missing targeted-weighting fields: "
+                + ", ".join(missing_fields)
+            )
+
+        target_snr_values = targeted_weighting_content[
+            "target_snr_values_db"
+        ]
+
+        if not isinstance(target_snr_values, list):
+            raise ValueError(
+                "target_snr_values_db must be a YAML list."
+            )
+
+        targeted_loss = ClassSNRWeightedCrossEntropyLoss(
+            target_class_index=targeted_weighting_content[
+                "target_class_index"
+            ],
+            target_snr_values_db=tuple(
+                float(value)
+                for value in target_snr_values
+            ),
+            target_weight=float(
+                targeted_weighting_content["target_weight"]
+            ),
+            snr_tolerance=float(
+                targeted_weighting_content.get(
+                    "snr_tolerance",
+                    1e-4,
+                )
+            ),
+        )
+
+        metadata_loss_function = targeted_loss
+        targeted_weighting_configuration = {
+            "enabled": True,
+            "target_class_index": (
+                targeted_loss.target_class_index
+            ),
+            "target_snr_values_db": list(
+                targeted_loss.target_snr_values_db
+            ),
+            "target_weight": targeted_loss.target_weight,
+            "snr_tolerance": targeted_loss.snr_tolerance,
+        }
+
     optimizer = AdamW(
         model.parameters(),
         lr=learning_rate,
@@ -224,6 +313,7 @@ def main() -> None:
             optimizer=optimizer,
             loss_function=loss_function,
             device=device,
+            metadata_loss_function=metadata_loss_function,
         )
         validation_metrics = run_evaluation_epoch(
             model=model,
@@ -268,6 +358,7 @@ def main() -> None:
         {
             "format_version": 1,
             "experiment_name": experiment_name,
+            "training_loss_configuration": targeted_weighting_configuration,
             "model_configuration": asdict(model_configuration),
             "model_state_dict": best_model_state,
             "class_names": [
@@ -291,6 +382,7 @@ def main() -> None:
     summary = {
         "format_version": 1,
         "experiment_name": experiment_name,
+        "training_loss_configuration": targeted_weighting_configuration,
         "seed": seed,
         "epochs": epochs,
         "best_epoch": best_epoch,
