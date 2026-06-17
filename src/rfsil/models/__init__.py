@@ -3,6 +3,10 @@ from rfsil.models.baseline_cnn import (
     BaselineIQCNN,
     count_trainable_parameters,
 )
+from rfsil.models.frozen_head import (
+    FrozenLinearHeadFit,
+    fit_frozen_linear_head,
+)
 from rfsil.models.head_refit import (
     LinearHeadParameters,
     apply_linear_head_parameters,
@@ -11,6 +15,8 @@ from rfsil.models.head_refit import (
 )
 
 __all__ = [
+    "FrozenLinearHeadFit",
+    "fit_frozen_linear_head",
     "LinearHeadParameters",
     "apply_linear_head_parameters",
     "compute_linear_logits",
