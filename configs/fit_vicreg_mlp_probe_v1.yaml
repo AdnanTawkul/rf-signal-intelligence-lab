@@ -1,0 +1,27 @@
+experiment_name: vicreg_groupnorm_v1_mlp_probe
+source_ssl_checkpoint_path: results/vicreg_groupnorm_v1/best_model.pt
+class_names:
+- BPSK
+- QPSK
+- 8PSK
+- 16QAM
+dataset:
+  train_path: data/processed/rf_modulation_baseline_v1/train.npz
+  validation_path: data/processed/rf_modulation_baseline_v1/validation.npz
+probe:
+  hidden_dimension: 128
+  dropout: 0.1
+  epochs: 100
+  batch_size: 256
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  seed: 2026
+extraction:
+  batch_size: 256
+  num_workers: 0
+  pin_memory: true
+output:
+  directory: results/vicreg_groupnorm_v1_mlp_probe
+  checkpoint_name: best_model.pt
+  summary_name: summary.json
+  history_name: history.json
