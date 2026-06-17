@@ -2,7 +2,7 @@
 
 A local, reproducible AI engineering project for RF modulation recognition from synthetic raw IQ signals.
 
-The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, and deployment-oriented extensions. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
+The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, representation analysis, classifier-head refitting, and deployment-oriented extensions. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
 
 ## Current Status
 
@@ -21,82 +21,105 @@ The project currently includes:
 - A compact one-dimensional CNN classifier
 - Configurable BatchNorm and GroupNorm support
 - Optional per-example RMS IQ normalization
+- Public extraction of the 128-dimensional pooled CNN embedding
+- Validation-selected frozen linear-head refitting
+- Conversion of standardized logistic-regression parameters into a native PyTorch `Linear` head
+- Native checkpoint export with no scikit-learn dependency at inference time
 - GPU training on an NVIDIA RTX 4080 SUPER
 - Held-out evaluation by class and SNR
 - Confusion-matrix and class-by-SNR error analysis
-- Five-seed training and test reproducibility studies
+- Five-seed training, refit, and test reproducibility studies
 - RMS-normalization and GroupNorm ablations
 - Automated tests with `pytest`
 - Static analysis with Ruff
 
-The selected supervised model now uses GroupNorm. The next major research milestones are self-supervised representation learning, uncertainty calibration, public-dataset validation, ONNX export, local latency benchmarking, and a Streamlit demo.
+The selected supervised system uses a GroupNorm CNN encoder followed by a validation-selected frozen linear-head refit. The next major research milestones are self-supervised representation learning, uncertainty calibration, public-dataset validation, ONNX export, local latency benchmarking, and a Streamlit demo.
 
 ## Selected Supervised Baseline
 
 The statistically defensible selected result is:
 
-> **95.29% ± 0.45 percentage points held-out test accuracy across five independent training seeds**
+> **96.50% ± 0.26 percentage points held-out test accuracy across five independent training seeds**
 
-Five independently trained GroupNorm checkpoints were evaluated on the same untouched balanced test split.
+Five independently trained GroupNorm checkpoints were refitted independently. For each seed, the CNN encoder was frozen, logistic-regression regularization was selected on the validation split, and the resulting standardized classifier was converted into an equivalent native PyTorch linear layer before evaluation on the untouched test split.
 
 | Metric | Result |
 |---|---:|
-| Mean test accuracy | 95.29% |
-| Standard deviation | 0.45 percentage points |
-| Minimum test accuracy | 94.71% |
-| Maximum test accuracy | 96.07% |
-| Mean accuracy at -4 dB | 74.90% |
+| Mean validation accuracy after head refit | 96.26% |
+| Validation standard deviation | 0.21 percentage points |
+| Mean held-out test accuracy | 96.50% |
+| Test standard deviation | 0.26 percentage points |
+| Minimum test accuracy | 96.14% |
+| Maximum test accuracy | 96.93% |
+| Mean accuracy at -4 dB | 78.40% |
+| Mean accuracy at 0 dB | 97.10% |
 | Test examples per run | 1,400 |
+
+### Individual Held-Out Test Results
+
+| Seed | Test accuracy |
+|---:|---:|
+| 2026 | 96.93% |
+| 2027 | 96.43% |
+| 2028 | 96.43% |
+| 2029 | 96.57% |
+| 2030 | 96.14% |
 
 ### Mean Per-Class Accuracy Across Five Seeds
 
 | Modulation | Mean accuracy | Standard deviation |
 |---|---:|---:|
-| BPSK | 99.89% | 0.23 percentage points |
-| QPSK | 92.23% | 2.05 percentage points |
-| 8PSK | 89.94% | 2.74 percentage points |
-| 16QAM | 99.09% | 0.66 percentage points |
+| BPSK | 99.94% | 0.11 percentage points |
+| QPSK | 93.14% | 1.02 percentage points |
+| 8PSK | 93.94% | 0.42 percentage points |
+| 16QAM | 98.97% | 0.29 percentage points |
 
 ### Mean Accuracy by SNR Across Five Seeds
 
 | SNR | Mean accuracy | Standard deviation |
 |---:|---:|---:|
-| -4 dB | 74.90% | 2.58 percentage points |
-| 0 dB | 93.40% | 1.07 percentage points |
-| 4 dB | 99.40% | 0.37 percentage points |
-| 8 dB | 99.80% | 0.24 percentage points |
-| 12 dB | 99.90% | 0.20 percentage points |
-| 16 dB | 99.90% | 0.20 percentage points |
-| 20 dB | 99.70% | 0.60 percentage points |
+| -4 dB | 78.40% | 1.39 percentage points |
+| 0 dB | 97.10% | 0.73 percentage points |
+| 4 dB | 100.00% | 0.00 percentage points |
+| 8 dB | 100.00% | 0.00 percentage points |
+| 12 dB | 100.00% | 0.00 percentage points |
+| 16 dB | 100.00% | 0.00 percentage points |
+| 20 dB | 100.00% | 0.00 percentage points |
 
-![GroupNorm five-seed held-out evaluation](reports/figures/baseline_cnn_groupnorm_seed_sweep_v1_test.png)
+![GroupNorm frozen-head-refit five-seed held-out evaluation](reports/figures/baseline_cnn_groupnorm_head_refit_seed_sweep_v1_test.png)
 
-Detailed methodology, BatchNorm results, RMS-normalization ablation, GroupNorm comparison, limitations, and five-seed evidence are documented in [Baseline CNN v1 Results](reports/baseline_cnn_v1.md).
+Detailed methodology, BatchNorm results, RMS-normalization ablation, GroupNorm comparison, class-by-SNR diagnosis, frozen-embedding experiments, and five-seed head-refit evidence are documented in [Baseline CNN v1 Results](reports/baseline_cnn_v1.md).
 
-## Why GroupNorm Was Selected
+## Why the Frozen Head Refit Was Selected
 
-The original BatchNorm baseline achieved:
-
-```text
-94.24% ± 0.29 percentage points
-```
-
-The GroupNorm variant improved the five-seed mean test accuracy to:
+The earlier GroupNorm baseline achieved:
 
 ```text
 95.29% ± 0.45 percentage points
 ```
 
-It also improved:
+The frozen linear-head refit improved the five-seed held-out result to:
 
-- Mean QPSK accuracy by 4.46 percentage points
-- Mean 16QAM accuracy by 2.75 percentage points
-- Mean accuracy at -4 dB by 4.40 percentage points
-- Worst-seed test accuracy by 0.78 percentage points
-- Mean final validation accuracy by 5.71 percentage points
-- Final-validation stability
+```text
+96.50% ± 0.26 percentage points
+```
 
-The tradeoff is explicit. Mean 8PSK accuracy decreased by 3.15 percentage points, and overall test variance increased slightly. GroupNorm is therefore selected as the stronger overall baseline, not presented as uniformly superior in every class.
+Compared with the original GroupNorm classifier head, the refit:
+
+- Increased mean validation accuracy by 0.61 percentage points
+- Improved validation accuracy for all five seeds
+- Increased mean held-out test accuracy by 1.21 percentage points
+- Improved held-out test accuracy for all five seeds
+- Reduced test standard deviation by 0.19 percentage points
+- Increased the minimum test accuracy by 1.43 percentage points
+- Increased mean QPSK accuracy by 0.91 percentage points
+- Increased mean 8PSK accuracy by 4.00 percentage points
+- Increased mean accuracy at -4 dB by 3.50 percentage points
+- Increased mean accuracy at 0 dB by 3.70 percentage points
+
+The worst refitted test run, 96.14%, exceeded the best original GroupNorm run, 96.07%.
+
+The refit does not change the CNN architecture or parameter count. It replaces only the final `Linear(128, 4)` decision boundary, and the saved checkpoint runs entirely in PyTorch.
 
 ## Signal and Dataset Pipeline
 
@@ -127,7 +150,7 @@ The generated dataset stores labels and impairment metadata, including SNR, freq
 
 ## Selected Model
 
-The selected supervised model is a compact one-dimensional CNN.
+The selected supervised system is a compact one-dimensional CNN encoder with GroupNorm and a validation-selected linear classifier head.
 
 ```text
 Input: [batch, 2, 2048]
@@ -136,6 +159,7 @@ Conv block: 2 → 32
 Conv block: 32 → 64
 Conv block: 64 → 128
 Adaptive global average pooling
+128-dimensional embedding
 Dropout
 Linear classifier: 128 → 4
 ```
@@ -153,23 +177,89 @@ Trainable parameters:
 73,092
 ```
 
+The frozen-head procedure keeps the trained CNN encoder fixed, extracts the pooled 128-dimensional embedding, fits a standardized multinomial logistic-regression classifier on training embeddings, selects regularization using validation accuracy, converts the selected classifier into raw-feature PyTorch weights, and writes those weights into the existing final linear layer.
+
 RMS input normalization remains implemented as an optional checkpointed setting, but it is disabled in the selected model because the five-seed ablation reduced mean test accuracy and increased variance.
+
+## Frozen Head Refit Protocol
+
+For every seed:
+
+1. Train the GroupNorm CNN using the normal 30-epoch training pipeline.
+2. Select the checkpoint with the highest validation accuracy.
+3. Freeze the CNN encoder.
+4. Extract training and validation embeddings with `model.extract_features(iq)`.
+5. Fit `StandardScaler + LogisticRegression` candidates using only training embeddings.
+6. Select the regularization value `C` using validation accuracy.
+7. Break validation ties in favor of the smaller `C`, corresponding to stronger regularization.
+8. Convert the standardized classifier to equivalent raw-embedding parameters.
+9. Replace the checkpoint's final PyTorch linear layer.
+10. Evaluate the resulting native checkpoint once on the held-out test split.
+
+Candidate regularization values:
+
+```text
+0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0
+```
+
+Selected values:
+
+| Seed | Selected C |
+|---:|---:|
+| 2026 | 1.0 |
+| 2027 | 10.0 |
+| 2028 | 0.1 |
+| 2029 | 3.0 |
+| 2030 | 1.0 |
+
+For standardized embeddings
+
+```text
+z = (x - mean) / scale
+```
+
+the equivalent raw-feature linear layer is:
+
+```text
+W_raw = W_standardized / scale
+b_raw = b_standardized - W_raw @ mean
+```
+
+This conversion allows the refitted classifier to be stored and deployed as a normal PyTorch checkpoint without requiring scikit-learn during inference.
 
 ## Reproducibility Findings
 
-### GroupNorm Validation Performance
+### GroupNorm Encoder Validation Performance
 
-Best-checkpoint validation accuracy across five seeds:
+Best-checkpoint validation accuracy before head refitting:
 
 ```text
 95.64% ± 0.40 percentage points
 ```
 
-Final-epoch validation accuracy across five seeds:
+Final-epoch validation accuracy before head refitting:
 
 ```text
 94.10% ± 2.34 percentage points
 ```
+
+### Validation-Selected Head Refit
+
+Validation accuracy after independently refitting each seed:
+
+```text
+96.26% ± 0.21 percentage points
+```
+
+| Seed | Original validation | Refitted validation | Change |
+|---:|---:|---:|---:|
+| 2026 | 96.43% | 96.64% | +0.21 pp |
+| 2027 | 95.50% | 96.29% | +0.79 pp |
+| 2028 | 95.43% | 96.14% | +0.71 pp |
+| 2029 | 95.29% | 96.14% | +0.86 pp |
+| 2030 | 95.57% | 96.07% | +0.50 pp |
+
+Every seed improved on validation, and validation variation decreased.
 
 ### BatchNorm Comparison
 
@@ -178,9 +268,10 @@ The earlier BatchNorm model produced:
 ```text
 Best validation: 94.17% ± 0.31 percentage points
 Final validation: 88.39% ± 4.13 percentage points
+Held-out test: 94.24% ± 0.29 percentage points
 ```
 
-GroupNorm substantially improved late-training behavior and reduced the dependence on unstable BatchNorm running statistics. Best-checkpoint selection is still retained as the experimental protocol.
+GroupNorm substantially improved late-training behavior and reduced dependence on unstable BatchNorm running statistics. The frozen-head refit then improved the learned decision boundary without modifying the encoder.
 
 ## RMS Normalization Ablation
 
@@ -245,7 +336,7 @@ Expected hardware in the original development environment:
 NVIDIA GeForce RTX 4080 SUPER
 ```
 
-## Reproduce the Selected GroupNorm Baseline
+## Reproduce the Selected Baseline
 
 ### Generate the baseline dataset
 
@@ -263,33 +354,35 @@ Expected split sizes:
 
 Generated datasets are stored under `data/processed/` and are intentionally excluded from Git.
 
-### Train one GroupNorm model
-
-```powershell
-python scripts\train_baseline.py --config configs\train_baseline_groupnorm_v1.yaml
-```
-
-### Evaluate the selected GroupNorm checkpoint
-
-```powershell
-python scripts\evaluate_baseline.py --config configs\evaluate_baseline_groupnorm_v1.yaml
-```
-
 ### Run the five-seed GroupNorm training study
 
 ```powershell
 python scripts\run_baseline_seed_sweep.py --config configs\baseline_groupnorm_seed_sweep_v1.yaml
 ```
 
-### Evaluate all five GroupNorm checkpoints
+### Refit all five classifier heads
 
 ```powershell
-python scripts\evaluate_seed_sweep.py --config configs\evaluate_groupnorm_seed_sweep_v1.yaml
+python scripts\run_frozen_head_refit_seed_sweep.py --config configs\refit_groupnorm_head_seed_sweep_v1.yaml
+```
+
+### Evaluate all five native refitted checkpoints
+
+```powershell
+python scripts\evaluate_seed_sweep.py --config configs\evaluate_groupnorm_head_refit_seed_sweep_v1.yaml
+```
+
+### Refit and evaluate one checkpoint
+
+```powershell
+python scripts\refit_frozen_head.py --config configs\refit_groupnorm_head_v1.yaml
+python scripts\evaluate_baseline.py --config configs\evaluate_groupnorm_head_refit_v1.yaml
+python scripts\analyze_baseline_errors.py --config configs\analyze_groupnorm_head_refit_v1.yaml
 ```
 
 ## Reproduce Historical Ablations
 
-### BatchNorm five-seed study
+### Original BatchNorm five-seed study
 
 ```powershell
 python scripts\run_baseline_seed_sweep.py --config configs\baseline_seed_sweep_v1.yaml
@@ -303,12 +396,19 @@ python scripts\run_baseline_seed_sweep.py --config configs\baseline_rms_seed_swe
 python scripts\evaluate_seed_sweep.py --config configs\evaluate_rms_seed_sweep_v1.yaml
 ```
 
-## Quality Checks
-
-Run the complete test suite:
+### Original GroupNorm five-seed study
 
 ```powershell
-python -m pytest
+python scripts\run_baseline_seed_sweep.py --config configs\baseline_groupnorm_seed_sweep_v1.yaml
+python scripts\evaluate_seed_sweep.py --config configs\evaluate_groupnorm_seed_sweep_v1.yaml
+```
+
+## Quality Checks
+
+Run the complete test suite with warnings treated as errors:
+
+```powershell
+python -m pytest -W error
 ```
 
 Run static analysis:
@@ -323,7 +423,7 @@ Check whitespace and patch integrity:
 git diff --check
 ```
 
-At the current milestone, the repository contains **223 passing tests**.
+At the current milestone, the repository contains **265 passing tests**.
 
 ## Repository Structure
 
@@ -392,8 +492,8 @@ It does not include:
 - Training and test data come from the same signal-generator family.
 - Real receiver effects and hardware-specific distortions are not yet represented fully.
 - Public RF datasets have not yet been integrated.
-- Low-SNR classification remains the dominant failure regime.
-- GroupNorm improves QPSK and 16QAM but reduces mean 8PSK accuracy.
+- Low-SNR phase-modulation discrimination remains the dominant failure regime.
+- The frozen linear-head refit improves the overall QPSK/8PSK boundary, but severe-noise errors remain.
 - Confidence calibration and uncertainty estimation are not yet implemented.
 - No self-supervised representation-learning result is available yet.
 - Deployment benchmarking and ONNX export are not yet implemented.
@@ -419,16 +519,20 @@ It does not include:
 - [x] RMS-normalization ablation
 - [x] BatchNorm versus GroupNorm ablation
 - [x] GroupNorm baseline selection
+- [x] GroupNorm 8PSK regression diagnosis
+- [x] Public CNN embedding extraction interface
+- [x] Frozen linear-head refit
+- [x] Native PyTorch classifier-head conversion
+- [x] Five-seed frozen-head reproducibility study
 - [x] Automated testing and Ruff checks
 
 ### Next
 
-- [ ] Investigate the GroupNorm 8PSK regression
 - [ ] Low-SNR-aware training experiments
 - [ ] Confidence calibration
 - [ ] Uncertainty estimation
 - [ ] Self-supervised contrastive encoder
-- [ ] Linear evaluation and fine-tuning
+- [ ] Self-supervised linear evaluation and fine-tuning
 - [ ] Public RF dataset integration
 - [ ] ONNX export
 - [ ] Local latency benchmark

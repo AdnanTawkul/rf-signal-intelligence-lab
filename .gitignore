@@ -63,3 +63,6 @@ desktop.ini
 
 # BatchNorm versus GroupNorm class-by-SNR comparison
 !reports/figures/batchnorm_vs_groupnorm_class_snr_v1.png
+
+# Selected frozen-head-refit five-seed figure
+!reports/figures/baseline_cnn_groupnorm_head_refit_seed_sweep_v1_test.png

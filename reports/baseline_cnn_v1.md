@@ -12,6 +12,17 @@ The model input shape is:
 
 Channel 0 contains the in-phase component. Channel 1 contains the quadrature component.
 
+This report preserves the complete experimental progression:
+
+1. Original BatchNorm baseline
+2. Five-seed reproducibility study
+3. RMS-normalization ablation
+4. GroupNorm ablation and promotion
+5. BatchNorm-versus-GroupNorm class-by-SNR diagnosis
+6. Frozen-embedding and classifier-head diagnosis
+7. Validation-selected frozen linear-head refit
+8. Final five-seed supervised baseline promotion
+
 ## Dataset
 
 The dataset contains four modulation classes:
@@ -48,15 +59,15 @@ Synthetic examples include:
 - Integer time shift
 - Limited flat Rayleigh fading
 
-## Model
+## Original Model
 
-The baseline classifier contains three one-dimensional convolutional blocks:
+The original baseline classifier contains three one-dimensional convolutional blocks:
 
 ```text
 2 → 32 → 64 → 128 channels
 ```
 
-Each block contains:
+Each original block contains:
 
 - One-dimensional convolution
 - Batch normalization
@@ -71,7 +82,9 @@ Trainable parameters:
 73,092
 ```
 
-## Training
+The later selected encoder retains the same topology and parameter count but replaces BatchNorm with GroupNorm using eight groups.
+
+## Original Training Configuration
 
 | Setting | Value |
 |---|---:|
@@ -80,12 +93,12 @@ Trainable parameters:
 | Learning rate | 0.001 |
 | Weight decay | 0.0001 |
 | Optimizer | AdamW |
-| Best epoch | 24 |
-| Best validation accuracy | 94.3% |
+| Best epoch, seed 2026 | 24 |
+| Best validation accuracy, seed 2026 | 94.3% |
 
-Validation performance fluctuated substantially during training. This indicates sensitivity to optimization or BatchNorm statistics and must not be hidden behind the best checkpoint result.
+Validation performance fluctuated substantially during original BatchNorm training. This indicated sensitivity to optimization or BatchNorm statistics and motivated the later normalization-layer study.
 
-## Held-Out Test Results
+## Original Single-Seed Held-Out Test Results
 
 Overall test accuracy:
 
@@ -114,19 +127,21 @@ Accuracy by SNR:
 | 16 dB | 98.00% |
 | 20 dB | 100.00% |
 
-## Confusion Matrix
+## Original Baseline Figures
+
+### Confusion Matrix
 
 ![Baseline CNN v1 confusion matrix](figures/baseline_cnn_v1_confusion_matrix.png)
 
-## Accuracy by SNR
+### Accuracy by SNR
 
 ![Baseline CNN v1 accuracy by SNR](figures/baseline_cnn_v1_accuracy_by_snr.png)
 
-## Class-by-SNR Error Analysis
+### Class-by-SNR Error Analysis
 
 ![Baseline CNN v1 class-by-SNR accuracy](figures/baseline_cnn_v1_class_snr_accuracy.png)
 
-The class-by-SNR breakdown identifies the dominant failure mode:
+The original class-by-SNR breakdown identified the dominant failure mode:
 
 | Modulation | Accuracy at -4 dB |
 |---|---:|
@@ -135,36 +150,11 @@ The class-by-SNR breakdown identifies the dominant failure mode:
 | 8PSK | 66.0% |
 | 16QAM | 76.0% |
 
-QPSK at -4 dB is the worst evaluated class-SNR group.
+QPSK at -4 dB was the worst original class-SNR group.
 
-This means the main weakness is not general classification capacity. The model struggles to distinguish phase-based constellations when noise severely corrupts instantaneous phase information.
+## Five-Seed BatchNorm Reproducibility Study
 
-## Limitations
-
-1. The dataset is entirely synthetic.
-2. No public real-world RF dataset has been evaluated yet.
-3. The test distribution uses the same generator family as training.
-4. Low-SNR QPSK performance is poor.
-5. Training validation metrics fluctuate significantly.
-6. Confidence calibration and uncertainty have not been evaluated.
-7. Results are from one model-training seed.
-8. No architecture comparison or ablation study has been performed.
-
-## Next Research Targets
-
-The next experiments should target evidence, not random tuning:
-
-1. Inspect the exact QPSK confusion destinations at -4 dB.
-2. Run multiple training seeds to measure result variance.
-3. Evaluate normalization strategies that reduce amplitude and channel-gain sensitivity.
-4. Compare BatchNorm with GroupNorm.
-5. Test low-SNR-aware sampling or curriculum strategies.
-6. Add confidence calibration and uncertainty evaluation.
-7. Evaluate on a public RF modulation dataset.
-
-## Five-Seed Reproducibility Study
-
-The baseline architecture was trained independently using five random seeds:
+The original architecture was trained independently using five random seeds:
 
 ```text
 2026, 2027, 2028, 2029, 2030
@@ -191,8 +181,6 @@ Individual test accuracies:
 | 2029 | 94.43% |
 | 2030 | 93.93% |
 
-The narrow range confirms that the original baseline result was not caused by a favorable random seed.
-
 ### Mean Per-Class Accuracy
 
 | Modulation | Mean accuracy | Standard deviation |
@@ -201,8 +189,6 @@ The narrow range confirms that the original baseline result was not caused by a 
 | QPSK | 87.77% | 2.32 percentage points |
 | 8PSK | 93.09% | 3.15 percentage points |
 | 16QAM | 96.34% | 1.72 percentage points |
-
-BPSK is essentially solved under the current synthetic distribution. QPSK and 8PSK show the greatest variation across independently trained models.
 
 ### Mean Accuracy by SNR
 
@@ -216,14 +202,6 @@ BPSK is essentially solved under the current synthetic distribution. QPSK and 8P
 | 16 dB | 97.90% | 0.20 percentage points |
 | 20 dB | 99.80% | 0.24 percentage points |
 
-The persistent bottleneck is the -4 dB condition. Increasing model capacity without directly addressing low-SNR phase discrimination would be undirected architecture tuning.
-
-### Five-Seed Test Figure
-
-![Baseline CNN five-seed test evaluation](figures/baseline_cnn_seed_sweep_v1_test.png)
-
-### Training Stability
-
 Best validation accuracy was stable across seeds:
 
 ```text
@@ -236,17 +214,11 @@ Final-epoch validation accuracy was substantially less stable:
 88.39% ± 4.13 percentage points
 ```
 
-This means model capability is repeatable, but the training trajectory is unstable. Best-checkpoint selection is currently essential. Reporting only the final epoch would significantly understate performance for several seeds.
-
-### Revised Baseline Claim
-
-The defensible baseline result is:
+The defensible original BatchNorm claim became:
 
 ```text
 94.24% ± 0.29 percentage points held-out test accuracy across five independent training seeds
 ```
-
-This replaces the weaker single-run claim of 94.14%.
 
 ## RMS Normalization Ablation
 
@@ -255,8 +227,6 @@ A controlled ablation tested per-example complex RMS normalization while keeping
 The transform scales every IQ example to unit average complex power while preserving relative constellation geometry.
 
 ### Single-Seed Result
-
-For seed 2026, RMS normalization appeared beneficial:
 
 | Metric | Original | RMS-normalized | Change |
 |---|---:|---:|---:|
@@ -267,7 +237,7 @@ For seed 2026, RMS normalization appeared beneficial:
 | Accuracy at -4 dB | 70.50% | 73.50% | +3.00 percentage points |
 | Accuracy at 0 dB | 93.50% | 90.50% | -3.00 percentage points |
 
-This single-run result was not sufficient to support a model change.
+The single-run improvement was not sufficient evidence for promotion.
 
 ### Five-Seed Validation Comparison
 
@@ -278,8 +248,6 @@ This single-run result was not sufficient to support a model change.
 | Minimum best validation accuracy | 93.57% | 93.07% | Worse |
 | Mean final validation accuracy | 88.39% | 84.94% | -3.45 percentage points |
 | Final-validation standard deviation | 4.13 pp | 8.36 pp | Worse |
-
-RMS normalization reduced mean validation performance and approximately doubled final-epoch variability.
 
 ### Five-Seed Held-Out Test Comparison
 
@@ -294,24 +262,13 @@ RMS normalization reduced mean validation performance and approximately doubled 
 | Accuracy at -4 dB | 70.50% | 68.90% | -1.60 percentage points |
 | Accuracy at 0 dB | 94.60% | 89.80% | -4.80 percentage points |
 
-### Ablation Conclusion
+### RMS Ablation Decision
 
-Per-example RMS normalization is rejected as the default preprocessing method for Baseline CNN v1.
+Per-example RMS normalization is rejected as the default preprocessing method. It reduced mean held-out accuracy, increased variance, lowered the worst-seed result, degraded QPSK and 8PSK, and made training instability worse.
 
-It improved 16QAM classification and one seed's test score, but across five independent runs it:
+## GroupNorm Ablation and Promotion
 
-1. Reduced mean held-out accuracy.
-2. Increased test variance.
-3. Lowered the worst-seed result.
-4. Degraded QPSK and 8PSK performance.
-5. Reduced accuracy at both -4 dB and 0 dB.
-6. Made training instability worse.
-
-The result demonstrates why single-seed improvements must not be treated as evidence.
-
-## GroupNorm Ablation and Baseline Promotion
-
-A controlled normalization-layer ablation replaced BatchNorm with GroupNorm while preserving the dataset, CNN architecture, optimizer, learning rate, batch size, 30-epoch budget, five random seeds, and disabled RMS input normalization.
+A controlled normalization-layer ablation replaced BatchNorm with GroupNorm while preserving the dataset, CNN topology, optimizer, learning rate, batch size, 30-epoch budget, five random seeds, and disabled RMS input normalization.
 
 The GroupNorm configuration used eight groups in every convolutional block.
 
@@ -359,29 +316,19 @@ Every GroupNorm run exceeded the maximum BatchNorm best-validation result. Group
 
 ![GroupNorm five-seed held-out evaluation](figures/baseline_cnn_groupnorm_seed_sweep_v1_test.png)
 
-### Decision
+### Historical GroupNorm Decision
 
-GroupNorm replaces BatchNorm as the selected supervised baseline.
+GroupNorm replaced BatchNorm as the selected supervised baseline because it improved mean and worst-seed held-out accuracy, QPSK, 16QAM, aggregate -4 dB performance, validation accuracy, and late-training stability.
 
-The decision is supported by higher mean and worst-seed held-out accuracy, stronger QPSK and 16QAM performance, improved -4 dB performance, higher validation accuracy, and much stronger late-training stability.
-
-The tradeoff is a 3.15 percentage-point reduction in mean 8PSK accuracy and a small increase in overall test variance. These regressions remain explicit research targets.
-
-### Selected Supervised Baseline Claim
+Its pre-refit baseline claim was:
 
 ```text
 95.29% ± 0.45 percentage points held-out test accuracy across five independent training seeds
 ```
 
-This supersedes the BatchNorm baseline result of:
-
-```text
-94.24% ± 0.29 percentage points
-```
-
 ## BatchNorm versus GroupNorm Class-by-SNR Diagnosis
 
-To locate the GroupNorm 8PSK regression, all five BatchNorm and five GroupNorm checkpoints were reevaluated on the same held-out test split. Accuracy was then aggregated jointly by true modulation class and SNR.
+All five BatchNorm and five GroupNorm checkpoints were reevaluated on the same held-out test split. Accuracy was aggregated jointly by true modulation class and SNR.
 
 ![Five-seed BatchNorm versus GroupNorm class-by-SNR comparison](figures/batchnorm_vs_groupnorm_class_snr_v1.png)
 
@@ -397,7 +344,7 @@ To locate the GroupNorm 8PSK regression, all five BatchNorm and five GroupNorm c
 | 16 dB | 98.8% | 99.6% | +0.8 percentage points |
 | 20 dB | 99.2% | 100.0% | +0.8 percentage points |
 
-The mean 8PSK regression is therefore not distributed across the full SNR range. It is concentrated almost entirely at -4 dB and 0 dB. From 4 dB upward, GroupNorm is effectively equivalent to or slightly better than BatchNorm.
+The GroupNorm 8PSK regression was concentrated almost entirely at -4 dB and 0 dB. From 4 dB upward, GroupNorm was effectively equivalent to or slightly better than BatchNorm.
 
 ### Largest Class-by-SNR Changes
 
@@ -406,10 +353,221 @@ The mean 8PSK regression is therefore not distributed across the full SNR range.
 | Largest GroupNorm gain | QPSK at -4 dB | +20.4 percentage points |
 | Largest GroupNorm loss | 8PSK at -4 dB | -16.8 percentage points |
 
-The selected GroupNorm model shifts low-SNR performance toward QPSK and away from 8PSK. This suggests that the main tradeoff is a changed decision boundary among phase-based modulation classes under severe noise, rather than a general loss of 8PSK representation quality.
+The GroupNorm model shifted low-SNR performance toward QPSK and away from 8PSK. This suggested a changed phase-class decision boundary rather than a general loss of 8PSK representation quality.
 
-### Diagnostic Conclusion
+## Frozen-Embedding Diagnosis
 
-GroupNorm remains the selected supervised baseline because it improves overall five-seed accuracy, worst-seed accuracy, QPSK, 16QAM, and aggregate -4 dB performance.
+The GroupNorm encoder's pooled representation has shape:
 
-The next targeted experiment should focus specifically on low-SNR QPSK-versus-8PSK separation. Broad architecture expansion or additional high-SNR training is not justified by this evidence.
+```text
+[batch, 128]
+```
+
+A logistic-regression probe trained on frozen low-SNR QPSK and 8PSK embeddings improved seed-2026 performance on the corresponding held-out subset:
+
+| Metric | Original four-class head | Frozen binary probe | Change |
+|---|---:|---:|---:|
+| Overall low-SNR QPSK/8PSK accuracy | 74.5% | 81.0% | +6.5 pp |
+| Accuracy at -4 dB | 59.0% | 67.0% | +8.0 pp |
+| Accuracy at 0 dB | 90.0% | 95.0% | +5.0 pp |
+| QPSK at -4 dB | 44.0% | 68.0% | +24.0 pp |
+| 8PSK at -4 dB | 74.0% | 66.0% | -8.0 pp |
+
+Across all five GroupNorm seeds, the low-SNR frozen binary probe improved validation in four of five seeds and test in all five seeds.
+
+A non-oracle routing rule based on confidence margins was not robust enough for promotion. Helpful and harmful specialist overrides occupied overlapping confidence ranges, and the direction-aware router had approximately neutral mean validation change.
+
+This evidence indicated that the encoder contained useful separability that the original learned four-class head did not fully exploit.
+
+## Frozen Four-Class Linear Probe
+
+A standardized four-class logistic-regression head was then fitted on the frozen 128-dimensional training embeddings for each seed.
+
+### Diagnostic Five-Seed Results
+
+| Split | Original GroupNorm head | Frozen linear probe | Change |
+|---|---:|---:|---:|
+| Validation mean accuracy | 95.64% | 96.16% | +0.51 pp |
+| Test mean accuracy | 95.29% | 96.33% | +1.04 pp |
+
+The frozen four-class probe improved validation and test accuracy for all five seeds. It particularly improved 8PSK, showing that the representation was stronger than the end-to-end classifier head suggested.
+
+This result justified implementing a reproducible, validation-selected, native PyTorch head-refit pipeline.
+
+## Deployable Frozen Linear-Head Refit
+
+### Method
+
+For each GroupNorm checkpoint:
+
+1. Freeze the trained CNN encoder.
+2. Extract 128-dimensional embeddings for the training and validation splits.
+3. Fit standardized multinomial logistic-regression classifiers on training embeddings.
+4. Evaluate candidate regularization values only on validation embeddings.
+5. Select the best validation candidate, preferring the smaller `C` on ties.
+6. Convert the standardized classifier into equivalent raw-embedding parameters.
+7. Replace the model's existing `Linear(128, 4)` weight and bias.
+8. Save a normal PyTorch checkpoint.
+9. Evaluate the resulting checkpoint once on the untouched test split.
+
+Candidate regularization values:
+
+```text
+0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0
+```
+
+For standardized features
+
+```text
+z = (x - mean) / scale
+```
+
+the conversion is:
+
+```text
+W_raw = W_standardized / scale
+b_raw = b_standardized - W_raw @ mean
+```
+
+The deployed checkpoint therefore requires no scikit-learn dependency at inference time.
+
+### Selected Regularization by Seed
+
+| Seed | Selected C |
+|---:|---:|
+| 2026 | 1.0 |
+| 2027 | 10.0 |
+| 2028 | 0.1 |
+| 2029 | 3.0 |
+| 2030 | 1.0 |
+
+### Five-Seed Validation Results
+
+| Seed | Original GroupNorm | Refitted head | Change |
+|---:|---:|---:|---:|
+| 2026 | 96.43% | 96.64% | +0.21 pp |
+| 2027 | 95.50% | 96.29% | +0.79 pp |
+| 2028 | 95.43% | 96.14% | +0.71 pp |
+| 2029 | 95.29% | 96.14% | +0.86 pp |
+| 2030 | 95.57% | 96.07% | +0.50 pp |
+
+Aggregate validation comparison:
+
+| Metric | Original GroupNorm | Refitted head | Change |
+|---|---:|---:|---:|
+| Mean accuracy | 95.64% | 96.26% | +0.61 pp |
+| Standard deviation | 0.40 pp | 0.21 pp | -0.19 pp |
+| Seeds improved | — | 5/5 | — |
+
+Regularization selection used validation data only. The test split was not accessed during fitting or model selection.
+
+### Five-Seed Held-Out Test Results
+
+Individual native-checkpoint results:
+
+| Seed | Test accuracy |
+|---:|---:|
+| 2026 | 96.93% |
+| 2027 | 96.43% |
+| 2028 | 96.43% |
+| 2029 | 96.57% |
+| 2030 | 96.14% |
+
+Aggregate comparison:
+
+| Metric | Original GroupNorm | Refitted head | Change |
+|---|---:|---:|---:|
+| Mean test accuracy | 95.29% | 96.50% | +1.21 pp |
+| Test standard deviation | 0.45 pp | 0.26 pp | -0.19 pp |
+| Minimum test accuracy | 94.71% | 96.14% | +1.43 pp |
+| Maximum test accuracy | 96.07% | 96.93% | +0.86 pp |
+| BPSK accuracy | 99.89% | 99.94% | +0.05 pp |
+| QPSK accuracy | 92.23% | 93.14% | +0.91 pp |
+| 8PSK accuracy | 89.94% | 93.94% | +4.00 pp |
+| 16QAM accuracy | 99.09% | 98.97% | -0.12 pp |
+| Accuracy at -4 dB | 74.90% | 78.40% | +3.50 pp |
+| Accuracy at 0 dB | 93.40% | 97.10% | +3.70 pp |
+
+Every refitted checkpoint improved on its original GroupNorm checkpoint. The worst refitted test result, 96.14%, exceeded the best original GroupNorm result, 96.07%.
+
+### Mean Refitted Accuracy by Class
+
+| Modulation | Mean accuracy | Standard deviation |
+|---|---:|---:|
+| BPSK | 99.94% | 0.11 percentage points |
+| QPSK | 93.14% | 1.02 percentage points |
+| 8PSK | 93.94% | 0.42 percentage points |
+| 16QAM | 98.97% | 0.29 percentage points |
+
+### Mean Refitted Accuracy by SNR
+
+| SNR | Mean accuracy | Standard deviation |
+|---:|---:|---:|
+| -4 dB | 78.40% | 1.39 percentage points |
+| 0 dB | 97.10% | 0.73 percentage points |
+| 4 dB | 100.00% | 0.00 percentage points |
+| 8 dB | 100.00% | 0.00 percentage points |
+| 12 dB | 100.00% | 0.00 percentage points |
+| 16 dB | 100.00% | 0.00 percentage points |
+| 20 dB | 100.00% | 0.00 percentage points |
+
+### Five-Seed Refit Figure
+
+![GroupNorm frozen-head-refit five-seed held-out evaluation](figures/baseline_cnn_groupnorm_head_refit_seed_sweep_v1_test.png)
+
+### Final Promotion Decision
+
+The GroupNorm CNN with a validation-selected frozen linear-head refit replaces the original end-to-end GroupNorm checkpoint as the selected supervised baseline.
+
+The promotion is supported by:
+
+1. Higher validation accuracy for all five seeds.
+2. Higher held-out test accuracy for all five seeds.
+3. Lower validation and test variation.
+4. A higher worst-seed test result.
+5. Stronger QPSK and substantially stronger 8PSK accuracy.
+6. Better performance at both -4 dB and 0 dB.
+7. Native PyTorch deployment with unchanged architecture and parameter count.
+8. No use of test labels or test metrics during fitting or selection.
+
+### Final Selected Supervised Baseline Claim
+
+```text
+96.50% ± 0.26 percentage points held-out test accuracy across five independent training seeds
+```
+
+This supersedes the pre-refit GroupNorm result:
+
+```text
+95.29% ± 0.45 percentage points
+```
+
+and the original BatchNorm result:
+
+```text
+94.24% ± 0.29 percentage points
+```
+
+## Current Limitations
+
+1. The benchmark remains entirely synthetic.
+2. Training, validation, and test examples use the same signal-generator family.
+3. Real receiver and hardware-specific distortions are not represented fully.
+4. No public real-world RF dataset has been evaluated yet.
+5. Severe-noise phase-modulation discrimination remains the dominant error regime.
+6. Confidence calibration and uncertainty have not been evaluated.
+7. The selected head is linear; nonlinear head alternatives have not yet been compared under the same protocol.
+8. No self-supervised representation-learning result is available yet.
+9. Deployment latency and ONNX compatibility have not yet been benchmarked.
+
+## Next Research Targets
+
+The next experiments should remain evidence-driven:
+
+1. Add low-SNR-aware sampling or curriculum experiments.
+2. Evaluate confidence calibration and uncertainty.
+3. Train a self-supervised encoder and apply the same linear-evaluation protocol.
+4. Validate on a public RF modulation dataset.
+5. Export the selected native checkpoint to ONNX.
+6. Benchmark local CPU and GPU latency.
+7. Build a local interactive demonstration.
