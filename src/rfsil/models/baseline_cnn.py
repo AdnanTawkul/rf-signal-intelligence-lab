@@ -180,8 +180,8 @@ class BaselineIQCNN(nn.Module):
             ),
         )
 
-    def forward(self, inputs: Tensor) -> Tensor:
-        """Return unnormalized class logits."""
+    def extract_features(self, inputs: Tensor) -> Tensor:
+        """Return the pooled feature embedding before classification."""
         if inputs.ndim != 3:
             raise ValueError(
                 "inputs must have shape [batch, channels, samples]."
@@ -206,9 +206,14 @@ class BaselineIQCNN(nn.Module):
         )
 
         features = self.features(model_inputs)
-        pooled = self.global_pool(features).squeeze(-1)
 
-        return self.classifier(pooled)
+        return self.global_pool(features).squeeze(-1)
+
+    def forward(self, inputs: Tensor) -> Tensor:
+        """Return unnormalized class logits."""
+        return self.classifier(
+            self.extract_features(inputs)
+        )
 
 
 def count_trainable_parameters(model: nn.Module) -> int:
