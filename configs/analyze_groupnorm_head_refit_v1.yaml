@@ -1,0 +1,7 @@
+experiment_name: baseline_cnn_groupnorm_head_refit_v1_error_analysis
+
+predictions_path: results/baseline_cnn_groupnorm_head_refit_v1_test/predictions.npz
+
+output:
+  directory: results/baseline_cnn_groupnorm_head_refit_v1_error_analysis
+  class_snr_heatmap: reports/figures/baseline_cnn_groupnorm_head_refit_v1_class_snr_accuracy.png
