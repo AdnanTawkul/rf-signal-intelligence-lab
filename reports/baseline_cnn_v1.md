@@ -378,3 +378,38 @@ This supersedes the BatchNorm baseline result of:
 ```text
 94.24% ± 0.29 percentage points
 ```
+
+## BatchNorm versus GroupNorm Class-by-SNR Diagnosis
+
+To locate the GroupNorm 8PSK regression, all five BatchNorm and five GroupNorm checkpoints were reevaluated on the same held-out test split. Accuracy was then aggregated jointly by true modulation class and SNR.
+
+![Five-seed BatchNorm versus GroupNorm class-by-SNR comparison](figures/batchnorm_vs_groupnorm_class_snr_v1.png)
+
+### 8PSK Accuracy by SNR
+
+| SNR | BatchNorm | GroupNorm | Change |
+|---:|---:|---:|---:|
+| -4 dB | 62.0% | 45.2% | -16.8 percentage points |
+| 0 dB | 96.8% | 86.8% | -10.0 percentage points |
+| 4 dB | 98.8% | 98.4% | -0.4 percentage points |
+| 8 dB | 96.0% | 99.6% | +3.6 percentage points |
+| 12 dB | 100.0% | 100.0% | 0.0 percentage points |
+| 16 dB | 98.8% | 99.6% | +0.8 percentage points |
+| 20 dB | 99.2% | 100.0% | +0.8 percentage points |
+
+The mean 8PSK regression is therefore not distributed across the full SNR range. It is concentrated almost entirely at -4 dB and 0 dB. From 4 dB upward, GroupNorm is effectively equivalent to or slightly better than BatchNorm.
+
+### Largest Class-by-SNR Changes
+
+| Comparison | Class and SNR | Change |
+|---|---|---:|
+| Largest GroupNorm gain | QPSK at -4 dB | +20.4 percentage points |
+| Largest GroupNorm loss | 8PSK at -4 dB | -16.8 percentage points |
+
+The selected GroupNorm model shifts low-SNR performance toward QPSK and away from 8PSK. This suggests that the main tradeoff is a changed decision boundary among phase-based modulation classes under severe noise, rather than a general loss of 8PSK representation quality.
+
+### Diagnostic Conclusion
+
+GroupNorm remains the selected supervised baseline because it improves overall five-seed accuracy, worst-seed accuracy, QPSK, 16QAM, and aggregate -4 dB performance.
+
+The next targeted experiment should focus specifically on low-SNR QPSK-versus-8PSK separation. Broad architecture expansion or additional high-SNR training is not justified by this evidence.
