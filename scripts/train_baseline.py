@@ -29,6 +29,7 @@ from rfsil.training.engine import (
     run_training_epoch,
     set_global_seed,
 )
+from rfsil.training.initialization import initialize_encoder_from_ssl_checkpoint
 from rfsil.training.losses import ClassSNRWeightedCrossEntropyLoss
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -174,7 +175,84 @@ def main() -> None:
         ),
     )
 
-    model = BaselineIQCNN(model_configuration).to(device)
+    model = BaselineIQCNN(model_configuration)
+
+    initialization_content = content.get(
+        "initialization"
+    )
+    initialization_metadata: (
+        dict[str, object] | None
+    ) = None
+
+    if initialization_content is not None:
+        if not isinstance(
+            initialization_content,
+            dict,
+        ):
+            raise ValueError(
+                "initialization must be a YAML mapping."
+            )
+
+        encoder_checkpoint_value = (
+            initialization_content.get(
+                "encoder_checkpoint_path"
+            )
+        )
+
+        if encoder_checkpoint_value is None:
+            raise ValueError(
+                "initialization.encoder_checkpoint_path "
+                "is required."
+            )
+
+        initialization_path = resolve_project_path(
+            str(encoder_checkpoint_value)
+        )
+
+        imported_initialization = (
+            initialize_encoder_from_ssl_checkpoint(
+                model,
+                initialization_path,
+            )
+        )
+
+        resolved_initialization_path = (
+            initialization_path.resolve()
+        )
+
+        try:
+            serialized_initialization_path = (
+                resolved_initialization_path
+                .relative_to(
+                    PROJECT_ROOT.resolve()
+                )
+                .as_posix()
+            )
+        except ValueError:
+            serialized_initialization_path = (
+                resolved_initialization_path.as_posix()
+            )
+
+        initialization_metadata = {
+            "type": "ssl_encoder",
+            "method": (
+                imported_initialization.method
+            ),
+            "experiment_name": (
+                imported_initialization
+                .experiment_name
+            ),
+            "seed": imported_initialization.seed,
+            "best_epoch": (
+                imported_initialization.best_epoch
+            ),
+            "encoder_checkpoint_path": (
+                serialized_initialization_path
+            ),
+            "classifier_initialized_fresh": True,
+        }
+
+    model = model.to(device)
     loss_function = nn.CrossEntropyLoss()
 
     targeted_weighting_content = training_content.get(
@@ -306,6 +384,22 @@ def main() -> None:
         f"{count_trainable_parameters(model)}"
     )
 
+    if initialization_metadata is None:
+        print("Initialization: random")
+    else:
+        print(
+            "Initialization: "
+            f"{initialization_metadata['method']} "
+            "SSL encoder"
+        )
+        print(
+            "Initialization checkpoint: "
+            f"{initialization_metadata['encoder_checkpoint_path']}"
+        )
+        print(
+            "Classifier initialized fresh: yes"
+        )
+
     for epoch in range(1, epochs + 1):
         train_metrics = run_training_epoch(
             model=model,
@@ -368,6 +462,7 @@ def main() -> None:
             "best_epoch": best_epoch,
             "best_validation_accuracy": best_validation_accuracy,
             "seed": seed,
+            "initialization": initialization_metadata,
         },
         checkpoint_path,
     )
@@ -384,6 +479,7 @@ def main() -> None:
         "experiment_name": experiment_name,
         "training_loss_configuration": targeted_weighting_configuration,
         "seed": seed,
+        "initialization": initialization_metadata,
         "epochs": epochs,
         "best_epoch": best_epoch,
         "best_validation_accuracy": best_validation_accuracy,
