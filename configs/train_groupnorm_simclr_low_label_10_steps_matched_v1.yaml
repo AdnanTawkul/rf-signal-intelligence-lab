@@ -1,0 +1,31 @@
+experiment_name: baseline_cnn_groupnorm_simclr_low_label_10_steps_matched_v1
+seed: 2026
+dataset:
+  train_path: data/processed/rf_modulation_baseline_v1/train.npz
+  validation_path: data/processed/rf_modulation_baseline_v1/validation.npz
+model:
+  in_channels: 2
+  num_classes: 4
+  channels:
+  - 32
+  - 64
+  - 128
+  kernel_size: 7
+  dropout: 0.2
+  normalize_input_rms: false
+  normalization: group
+  group_norm_groups: 8
+training:
+  epochs: 330
+  batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  num_workers: 0
+  pin_memory: true
+  examples_per_class_snr: 10
+  subset_seed: 2026
+output:
+  directory: results/baseline_cnn_groupnorm_simclr_low_label_10_steps_matched_v1
+  figure_path: reports/figures/baseline_cnn_groupnorm_simclr_low_label_10_steps_matched_v1_training.png
+initialization:
+  encoder_checkpoint_path: results/simclr_groupnorm_v1/best_model.pt

@@ -1,0 +1,22 @@
+experiment_name: low_label_ssl_step_matched_seed_sweep_v1
+
+seeds:
+  - 2026
+  - 2027
+  - 2028
+  - 2029
+  - 2030
+
+methods:
+  random:
+    template_config: configs/train_groupnorm_low_label_10_steps_matched_v1.yaml
+
+  simclr:
+    template_config: configs/train_groupnorm_simclr_low_label_10_steps_matched_v1.yaml
+
+  vicreg:
+    template_config: configs/train_groupnorm_vicreg_low_label_10_steps_matched_v1.yaml
+
+output:
+  directory: results/low_label_ssl_step_matched_seed_sweep_v1
+  aggregate_name: aggregate.json

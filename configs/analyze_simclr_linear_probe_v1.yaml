@@ -1,0 +1,7 @@
+experiment_name: simclr_groupnorm_v1_linear_probe_error_analysis
+
+predictions_path: results/simclr_groupnorm_v1_linear_probe_test/predictions.npz
+
+output:
+  directory: results/simclr_groupnorm_v1_linear_probe_error_analysis
+  class_snr_heatmap: reports/figures/simclr_groupnorm_v1_linear_probe_class_snr_accuracy.png

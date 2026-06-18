@@ -1,0 +1,51 @@
+experiment_name: simclr_groupnorm_v1
+seed: 2026
+
+dataset:
+  train_path: data/processed/rf_modulation_baseline_v1/train.npz
+  validation_path: data/processed/rf_modulation_baseline_v1/validation.npz
+
+encoder:
+  in_channels: 2
+  num_classes: 4
+  channels:
+    - 32
+    - 64
+    - 128
+  kernel_size: 7
+  dropout: 0.2
+  normalize_input_rms: false
+  normalization: group
+  group_norm_groups: 8
+
+projection_head:
+  hidden_dimension: 256
+  output_dimension: 128
+
+augmentation:
+  phase_rotation_probability: 0.8
+  max_phase_rotation_rad: 3.141592653589793
+
+  amplitude_scale_probability: 0.5
+  amplitude_scale_min: 0.8
+  amplitude_scale_max: 1.25
+
+  time_shift_probability: 0.5
+  max_time_shift_samples: 64
+
+  awgn_probability: 0.5
+  awgn_snr_db_min: 18.0
+  awgn_snr_db_max: 30.0
+
+training:
+  epochs: 50
+  batch_size: 256
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  temperature: 0.1
+  num_workers: 0
+  pin_memory: true
+
+output:
+  directory: results/simclr_groupnorm_v1
+  figure_path: reports/figures/simclr_groupnorm_v1_training.png

@@ -13,6 +13,7 @@ import yaml
 from torch import nn
 from torch.optim import AdamW
 
+from rfsil.data.stratified_subset import create_class_snr_stratified_subset
 from rfsil.data.synthetic import MODULATION_CLASSES
 from rfsil.data.torch_dataset import (
     DataLoaderConfig,
@@ -29,6 +30,7 @@ from rfsil.training.engine import (
     run_training_epoch,
     set_global_seed,
 )
+from rfsil.training.initialization import initialize_encoder_from_ssl_checkpoint
 from rfsil.training.losses import ClassSNRWeightedCrossEntropyLoss
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -133,6 +135,52 @@ def main() -> None:
         resolve_project_path(dataset_content["validation_path"])
     )
 
+    labeled_subset_metadata: (
+        dict[str, int] | None
+    ) = None
+
+    examples_per_class_snr_value = (
+        training_content.get(
+            "examples_per_class_snr"
+        )
+    )
+
+    if examples_per_class_snr_value is not None:
+        subset_seed_value = training_content.get(
+            "subset_seed",
+            seed,
+        )
+        full_training_example_count = len(
+            train_dataset
+        )
+
+        train_dataset = (
+            create_class_snr_stratified_subset(
+                dataset=train_dataset,
+                examples_per_stratum=(
+                    examples_per_class_snr_value
+                ),
+                seed=subset_seed_value,
+            )
+        )
+
+        labeled_subset_metadata = {
+            "strategy": "class_snr_stratified",
+            "examples_per_class_snr": int(
+                examples_per_class_snr_value
+            ),
+            "subset_seed": int(
+                subset_seed_value
+            ),
+            "full_training_examples": int(
+                full_training_example_count
+            ),
+            "selected_training_examples": int(
+                len(train_dataset)
+            ),
+        }
+
+
     train_loader = create_data_loader(
         train_dataset,
         DataLoaderConfig(
@@ -174,7 +222,84 @@ def main() -> None:
         ),
     )
 
-    model = BaselineIQCNN(model_configuration).to(device)
+    model = BaselineIQCNN(model_configuration)
+
+    initialization_content = content.get(
+        "initialization"
+    )
+    initialization_metadata: (
+        dict[str, object] | None
+    ) = None
+
+    if initialization_content is not None:
+        if not isinstance(
+            initialization_content,
+            dict,
+        ):
+            raise ValueError(
+                "initialization must be a YAML mapping."
+            )
+
+        encoder_checkpoint_value = (
+            initialization_content.get(
+                "encoder_checkpoint_path"
+            )
+        )
+
+        if encoder_checkpoint_value is None:
+            raise ValueError(
+                "initialization.encoder_checkpoint_path "
+                "is required."
+            )
+
+        initialization_path = resolve_project_path(
+            str(encoder_checkpoint_value)
+        )
+
+        imported_initialization = (
+            initialize_encoder_from_ssl_checkpoint(
+                model,
+                initialization_path,
+            )
+        )
+
+        resolved_initialization_path = (
+            initialization_path.resolve()
+        )
+
+        try:
+            serialized_initialization_path = (
+                resolved_initialization_path
+                .relative_to(
+                    PROJECT_ROOT.resolve()
+                )
+                .as_posix()
+            )
+        except ValueError:
+            serialized_initialization_path = (
+                resolved_initialization_path.as_posix()
+            )
+
+        initialization_metadata = {
+            "type": "ssl_encoder",
+            "method": (
+                imported_initialization.method
+            ),
+            "experiment_name": (
+                imported_initialization
+                .experiment_name
+            ),
+            "seed": imported_initialization.seed,
+            "best_epoch": (
+                imported_initialization.best_epoch
+            ),
+            "encoder_checkpoint_path": (
+                serialized_initialization_path
+            ),
+            "classifier_initialized_fresh": True,
+        }
+
+    model = model.to(device)
     loss_function = nn.CrossEntropyLoss()
 
     targeted_weighting_content = training_content.get(
@@ -300,11 +425,41 @@ def main() -> None:
     print(f"Seed: {seed}")
     print(f"Device: {device}")
     print(f"Train examples: {len(train_dataset)}")
+
+    if labeled_subset_metadata is not None:
+        print(
+            "Full training examples: "
+            f"{labeled_subset_metadata['full_training_examples']}"
+        )
+        print(
+            "Examples per class-SNR stratum: "
+            f"{labeled_subset_metadata['examples_per_class_snr']}"
+        )
+        print(
+            "Labeled-subset seed: "
+            f"{labeled_subset_metadata['subset_seed']}"
+        )
     print(f"Validation examples: {len(validation_dataset)}")
     print(
         "Trainable parameters: "
         f"{count_trainable_parameters(model)}"
     )
+
+    if initialization_metadata is None:
+        print("Initialization: random")
+    else:
+        print(
+            "Initialization: "
+            f"{initialization_metadata['method']} "
+            "SSL encoder"
+        )
+        print(
+            "Initialization checkpoint: "
+            f"{initialization_metadata['encoder_checkpoint_path']}"
+        )
+        print(
+            "Classifier initialized fresh: yes"
+        )
 
     for epoch in range(1, epochs + 1):
         train_metrics = run_training_epoch(
@@ -368,6 +523,8 @@ def main() -> None:
             "best_epoch": best_epoch,
             "best_validation_accuracy": best_validation_accuracy,
             "seed": seed,
+            "initialization": initialization_metadata,
+            "labeled_subset": labeled_subset_metadata,
         },
         checkpoint_path,
     )
@@ -384,6 +541,8 @@ def main() -> None:
         "experiment_name": experiment_name,
         "training_loss_configuration": targeted_weighting_configuration,
         "seed": seed,
+        "initialization": initialization_metadata,
+        "labeled_subset": labeled_subset_metadata,
         "epochs": epochs,
         "best_epoch": best_epoch,
         "best_validation_accuracy": best_validation_accuracy,
