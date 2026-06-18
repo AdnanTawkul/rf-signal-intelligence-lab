@@ -21,9 +21,10 @@ from rfsil.data.torch_dataset import (
     create_data_loader,
 )
 from rfsil.models.baseline_cnn import (
-    BaselineCNNConfig,
-    BaselineIQCNN,
     count_trainable_parameters,
+)
+from rfsil.models.model_factory import (
+    create_model_from_mapping,
 )
 from rfsil.training.engine import (
     run_evaluation_epoch,
@@ -202,27 +203,12 @@ def main() -> None:
         ),
     )
 
-    model_configuration = BaselineCNNConfig(
-        in_channels=int(model_content["in_channels"]),
-        num_classes=int(model_content["num_classes"]),
-        channels=tuple(
-            int(value)
-            for value in model_content["channels"]
-        ),
-        kernel_size=int(model_content["kernel_size"]),
-        dropout=float(model_content["dropout"]),
-        normalize_input_rms=bool(
-            model_content.get("normalize_input_rms", False)
-        ),
-        normalization=str(
-            model_content.get("normalization", "batch")
-        ),
-        group_norm_groups=int(
-            model_content.get("group_norm_groups", 8)
-        ),
+    (
+        model,
+        model_configuration,
+    ) = create_model_from_mapping(
+        model_content
     )
-
-    model = BaselineIQCNN(model_configuration)
 
     initialization_content = content.get(
         "initialization"

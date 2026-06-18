@@ -1,0 +1,17 @@
+experiment_name: baseline_cnn_groupnorm_channel_aware_mild_seed_sweep_v1_test
+checkpoint_directory: results/baseline_cnn_groupnorm_channel_aware_seed_sweep_v1
+test_path: data/processed/rf_modulation_multipath_mild_v1/test.npz
+seeds:
+- 2026
+- 2027
+- 2028
+- 2029
+- 2030
+evaluation:
+  batch_size: 256
+  num_workers: 0
+  pin_memory: true
+output:
+  directory: results/baseline_cnn_groupnorm_channel_aware_mild_seed_sweep_v1_test
+  figure_path: reports/figures/baseline_cnn_groupnorm_channel_aware_mild_seed_sweep_v1_test.png
+  save_predictions: true
