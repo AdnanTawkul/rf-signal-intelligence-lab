@@ -166,6 +166,150 @@ def apply_flat_rayleigh_fading(
     return (iq * channel_coefficient).astype(np.complex64)
 
 
+
+def apply_tapped_delay_line(
+    samples: ArrayLike,
+    tap_delays_samples: ArrayLike,
+    tap_gains: ArrayLike,
+    normalize_tap_power: bool = True,
+) -> ComplexArray:
+    """Apply a complex finite tapped-delay-line multipath channel.
+
+    Each path contributes a delayed and complex-scaled copy of the input:
+
+        y[n] = sum_k h[k] * x[n - d[k]]
+
+    Delays use zero padding and never wrap around. The returned signal has the
+    same number of samples as the input.
+
+    Args:
+        samples: One-dimensional complex IQ signal.
+        tap_delays_samples: Nonnegative integer delay for every channel path.
+        tap_gains: Complex gain for every channel path.
+        normalize_tap_power: Normalize the sum of squared tap magnitudes to one.
+
+    Returns:
+        Frequency-selective faded IQ samples with ``complex64`` dtype.
+
+    Raises:
+        ValueError: If the signal, delays, gains, or normalization flag are
+            invalid.
+    """
+    iq = _validate_iq_samples(samples)
+
+    delay_values = np.asarray(tap_delays_samples)
+
+    if delay_values.ndim != 1:
+        raise ValueError(
+            "tap_delays_samples must be one-dimensional."
+        )
+
+    if delay_values.size == 0:
+        raise ValueError(
+            "tap_delays_samples must not be empty."
+        )
+
+    if (
+        np.issubdtype(delay_values.dtype, np.bool_)
+        or not np.issubdtype(
+            delay_values.dtype,
+            np.integer,
+        )
+    ):
+        raise ValueError(
+            "tap_delays_samples must contain integers."
+        )
+
+    delays = delay_values.astype(
+        np.int64,
+        copy=False,
+    )
+
+    if np.any(delays < 0):
+        raise ValueError(
+            "tap_delays_samples must be nonnegative."
+        )
+
+    if np.any(delays >= iq.size):
+        raise ValueError(
+            "Every tap delay must be smaller than "
+            "the input signal length."
+        )
+
+    gains = np.asarray(
+        tap_gains,
+        dtype=np.complex64,
+    )
+
+    if gains.ndim != 1:
+        raise ValueError(
+            "tap_gains must be one-dimensional."
+        )
+
+    if gains.size == 0:
+        raise ValueError(
+            "tap_gains must not be empty."
+        )
+
+    if gains.shape != delays.shape:
+        raise ValueError(
+            "tap_delays_samples and tap_gains "
+            "must have matching shapes."
+        )
+
+    if not np.all(np.isfinite(gains)):
+        raise ValueError(
+            "tap_gains must contain only finite values."
+        )
+
+    if not isinstance(
+        normalize_tap_power,
+        (bool, np.bool_),
+    ):
+        raise ValueError(
+            "normalize_tap_power must be a boolean."
+        )
+
+    tap_power = float(
+        np.sum(
+            np.abs(
+                gains.astype(np.complex128)
+            )
+            ** 2
+        )
+    )
+
+    if tap_power <= 0.0:
+        raise ValueError(
+            "At least one tap gain must be nonzero."
+        )
+
+    effective_gains = gains.copy()
+
+    if bool(normalize_tap_power):
+        effective_gains = (
+            effective_gains
+            / np.float32(np.sqrt(tap_power))
+        ).astype(np.complex64)
+
+    output = np.zeros_like(iq)
+
+    for delay, gain in zip(
+        delays,
+        effective_gains,
+        strict=True,
+    ):
+        selected_delay = int(delay)
+
+        if selected_delay == 0:
+            output += iq * gain
+        else:
+            output[selected_delay:] += (
+                iq[:-selected_delay] * gain
+            )
+
+    return output.astype(np.complex64)
+
 def apply_frequency_offset(
     samples: ArrayLike,
     frequency_offset_hz: float,
@@ -201,5 +345,6 @@ __all__ = [
     "apply_flat_rayleigh_fading",
     "apply_frequency_offset",
     "apply_phase_offset",
+    "apply_tapped_delay_line",
     "apply_time_shift",
 ]

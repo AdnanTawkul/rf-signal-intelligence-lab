@@ -19,6 +19,7 @@ from rfsil.evaluation.classification import (
     collect_predictions,
     evaluate_predictions,
 )
+from rfsil.evaluation.prediction_artifacts import save_prediction_results
 from rfsil.models.baseline_cnn import (
     BaselineCNNConfig,
     BaselineIQCNN,
@@ -283,11 +284,9 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    np.savez_compressed(
+    save_prediction_results(
         predictions_path,
-        labels=prediction_results.labels,
-        predictions=prediction_results.predictions,
-        snr_db=prediction_results.snr_db,
+        prediction_results,
     )
 
     print(f"Device: {device}")

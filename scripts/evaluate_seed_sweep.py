@@ -18,6 +18,7 @@ from rfsil.evaluation.classification import (
     collect_predictions,
     evaluate_predictions,
 )
+from rfsil.evaluation.prediction_artifacts import save_prediction_results
 from rfsil.evaluation.seed_test import (
     SeedTestResult,
     aggregate_seed_test_results,
@@ -121,6 +122,50 @@ def main() -> None:
         "cuda" if torch.cuda.is_available() else "cpu"
     )
 
+    output_content = content["output"]
+
+    if not isinstance(output_content, dict):
+        raise ValueError(
+            "output must be a mapping."
+        )
+
+    output_directory = resolve_project_path(
+        output_content["directory"]
+    )
+    figure_path = resolve_project_path(
+        output_content["figure_path"]
+    )
+
+    save_predictions = output_content.get(
+        "save_predictions",
+        False,
+    )
+
+    if not isinstance(save_predictions, bool):
+        raise ValueError(
+            "output.save_predictions must be "
+            "a boolean."
+        )
+
+    output_directory.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    figure_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    predictions_directory = (
+        output_directory / "predictions"
+    )
+
+    if save_predictions:
+        predictions_directory.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
     evaluation_content = content["evaluation"]
     dataset = NPZIQDataset(test_path)
     loader = create_data_loader(
@@ -186,6 +231,13 @@ def main() -> None:
             device=device,
         )
 
+        if save_predictions:
+            save_prediction_results(
+                predictions_directory
+                / f"seed_{seed}.npz",
+                predictions,
+            )
+
         evaluation = evaluate_predictions(
             labels=predictions.labels,
             predictions=predictions.predictions,
@@ -212,18 +264,9 @@ def main() -> None:
 
     aggregate = aggregate_seed_test_results(results)
 
-    output_content = content["output"]
-    output_directory = resolve_project_path(
-        output_content["directory"]
+    aggregate_path = (
+        output_directory / "aggregate_metrics.json"
     )
-    figure_path = resolve_project_path(
-        output_content["figure_path"]
-    )
-
-    output_directory.mkdir(parents=True, exist_ok=True)
-    figure_path.parent.mkdir(parents=True, exist_ok=True)
-
-    aggregate_path = output_directory / "aggregate_metrics.json"
 
     aggregate_content = {
         "format_version": 1,
@@ -392,6 +435,11 @@ def main() -> None:
 
     print(f"Aggregate metrics: {aggregate_path}")
     print(f"Figure: {figure_path}")
+
+    if save_predictions:
+        print(
+            f"Predictions: {predictions_directory}"
+        )
 
 
 if __name__ == "__main__":

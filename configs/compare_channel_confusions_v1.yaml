@@ -1,0 +1,26 @@
+experiment_name: channel_confusion_robustness_v1
+
+reference_condition: clean
+
+seeds:
+  - 2026
+  - 2027
+  - 2028
+  - 2029
+  - 2030
+
+class_names:
+  - BPSK
+  - QPSK
+  - 8PSK
+  - 16QAM
+
+conditions:
+  clean: results/baseline_cnn_groupnorm_head_refit_seed_sweep_v1_test/predictions
+  mild: results/baseline_cnn_groupnorm_head_refit_multipath_mild_seed_sweep_v1_test/predictions
+  moderate: results/baseline_cnn_groupnorm_head_refit_multipath_moderate_seed_sweep_v1_test/predictions
+  severe: results/baseline_cnn_groupnorm_head_refit_multipath_severe_seed_sweep_v1_test/predictions
+
+output:
+  summary_json: results/channel_confusion_robustness_v1/summary.json
+  figure_path: reports/figures/channel_confusion_robustness_v1.png
