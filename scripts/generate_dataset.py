@@ -74,6 +74,16 @@ def build_configuration(
             for value in content["time_shift_range_samples"]
         ),
         rayleigh_probability=float(content["rayleigh_probability"]),
+
+        multipath_profile=(
+
+            None
+
+            if content.get("multipath_profile") is None
+
+            else str(content["multipath_profile"])
+
+        ),
     )
 
 

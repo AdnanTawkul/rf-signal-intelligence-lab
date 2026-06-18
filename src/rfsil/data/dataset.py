@@ -15,6 +15,7 @@ from rfsil.data.synthetic import (
     SyntheticExampleConfig,
     generate_synthetic_example,
 )
+from rfsil.dsp.channel_profiles import get_multipath_profile
 
 Float32Array = NDArray[np.float32]
 Int64Array = NDArray[np.int64]
@@ -39,6 +40,7 @@ class DatasetGenerationConfig:
     amplitude_scale_range: tuple[float, float]
     time_shift_range_samples: tuple[int, int]
     rayleigh_probability: float
+    multipath_profile: str | None = None
 
     def __post_init__(self) -> None:
         """Validate the complete dataset configuration."""
@@ -95,6 +97,17 @@ class DatasetGenerationConfig:
         ):
             raise ValueError(
                 "rayleigh_probability must be finite and in the interval [0, 1]."
+            )
+
+        if self.multipath_profile is not None:
+            selected_profile = get_multipath_profile(
+                self.multipath_profile
+            )
+
+            object.__setattr__(
+                self,
+                "multipath_profile",
+                selected_profile.name,
             )
 
 
@@ -271,6 +284,9 @@ def build_dataset_split(
                     amplitude_scale=selected_amplitude_scale,
                     time_shift_samples=selected_time_shift,
                     apply_rayleigh_fading=selected_rayleigh_fading,
+                    multipath_profile=(
+                        configuration.multipath_profile
+                    ),
                 )
 
                 example = generate_synthetic_example(
