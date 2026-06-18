@@ -13,6 +13,7 @@ import yaml
 from torch import nn
 from torch.optim import AdamW
 
+from rfsil.data.stratified_subset import create_class_snr_stratified_subset
 from rfsil.data.synthetic import MODULATION_CLASSES
 from rfsil.data.torch_dataset import (
     DataLoaderConfig,
@@ -133,6 +134,52 @@ def main() -> None:
     validation_dataset = NPZIQDataset(
         resolve_project_path(dataset_content["validation_path"])
     )
+
+    labeled_subset_metadata: (
+        dict[str, int] | None
+    ) = None
+
+    examples_per_class_snr_value = (
+        training_content.get(
+            "examples_per_class_snr"
+        )
+    )
+
+    if examples_per_class_snr_value is not None:
+        subset_seed_value = training_content.get(
+            "subset_seed",
+            seed,
+        )
+        full_training_example_count = len(
+            train_dataset
+        )
+
+        train_dataset = (
+            create_class_snr_stratified_subset(
+                dataset=train_dataset,
+                examples_per_stratum=(
+                    examples_per_class_snr_value
+                ),
+                seed=subset_seed_value,
+            )
+        )
+
+        labeled_subset_metadata = {
+            "strategy": "class_snr_stratified",
+            "examples_per_class_snr": int(
+                examples_per_class_snr_value
+            ),
+            "subset_seed": int(
+                subset_seed_value
+            ),
+            "full_training_examples": int(
+                full_training_example_count
+            ),
+            "selected_training_examples": int(
+                len(train_dataset)
+            ),
+        }
+
 
     train_loader = create_data_loader(
         train_dataset,
@@ -378,6 +425,20 @@ def main() -> None:
     print(f"Seed: {seed}")
     print(f"Device: {device}")
     print(f"Train examples: {len(train_dataset)}")
+
+    if labeled_subset_metadata is not None:
+        print(
+            "Full training examples: "
+            f"{labeled_subset_metadata['full_training_examples']}"
+        )
+        print(
+            "Examples per class-SNR stratum: "
+            f"{labeled_subset_metadata['examples_per_class_snr']}"
+        )
+        print(
+            "Labeled-subset seed: "
+            f"{labeled_subset_metadata['subset_seed']}"
+        )
     print(f"Validation examples: {len(validation_dataset)}")
     print(
         "Trainable parameters: "
@@ -463,6 +524,7 @@ def main() -> None:
             "best_validation_accuracy": best_validation_accuracy,
             "seed": seed,
             "initialization": initialization_metadata,
+            "labeled_subset": labeled_subset_metadata,
         },
         checkpoint_path,
     )
@@ -480,6 +542,7 @@ def main() -> None:
         "training_loss_configuration": targeted_weighting_configuration,
         "seed": seed,
         "initialization": initialization_metadata,
+        "labeled_subset": labeled_subset_metadata,
         "epochs": epochs,
         "best_epoch": best_epoch,
         "best_validation_accuracy": best_validation_accuracy,
