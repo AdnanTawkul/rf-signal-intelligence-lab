@@ -46,46 +46,101 @@ def build_configuration(
     content: dict[str, Any],
 ) -> DatasetGenerationConfig:
     """Convert YAML values into a validated dataset configuration."""
+    distribution_content = content.get(
+        "multipath_distribution"
+    )
+
+    multipath_distribution = None
+
+    if distribution_content is not None:
+        if not isinstance(
+            distribution_content,
+            dict,
+        ):
+            raise ValueError(
+                "multipath_distribution must be "
+                "a YAML mapping."
+            )
+
+        multipath_distribution = {}
+
+        for profile_name, probability in (
+            distribution_content.items()
+        ):
+            if not isinstance(profile_name, str):
+                raise ValueError(
+                    "Multipath distribution profile "
+                    "names must be strings."
+                )
+
+            if isinstance(probability, bool):
+                raise ValueError(
+                    "Multipath distribution "
+                    "probabilities must be numeric."
+                )
+
+            multipath_distribution[
+                profile_name
+            ] = float(probability)
+
     return DatasetGenerationConfig(
         dataset_name=str(content["dataset_name"]),
         sample_count=int(content["sample_count"]),
-        sample_rate_hz=float(content["sample_rate_hz"]),
-        samples_per_symbol=int(content["samples_per_symbol"]),
+        sample_rate_hz=float(
+            content["sample_rate_hz"]
+        ),
+        samples_per_symbol=int(
+            content["samples_per_symbol"]
+        ),
         rolloff=float(content["rolloff"]),
-        span_symbols=int(content["span_symbols"]),
+        span_symbols=int(
+            content["span_symbols"]
+        ),
         snr_values_db=tuple(
             float(value)
             for value in content["snr_values_db"]
         ),
         frequency_offset_range_hz=tuple(
             float(value)
-            for value in content["frequency_offset_range_hz"]
+            for value in content[
+                "frequency_offset_range_hz"
+            ]
         ),
         phase_offset_range_rad=tuple(
             float(value)
-            for value in content["phase_offset_range_rad"]
+            for value in content[
+                "phase_offset_range_rad"
+            ]
         ),
         amplitude_scale_range=tuple(
             float(value)
-            for value in content["amplitude_scale_range"]
+            for value in content[
+                "amplitude_scale_range"
+            ]
         ),
         time_shift_range_samples=tuple(
             int(value)
-            for value in content["time_shift_range_samples"]
+            for value in content[
+                "time_shift_range_samples"
+            ]
         ),
-        rayleigh_probability=float(content["rayleigh_probability"]),
-
+        rayleigh_probability=float(
+            content["rayleigh_probability"]
+        ),
         multipath_profile=(
-
             None
-
-            if content.get("multipath_profile") is None
-
-            else str(content["multipath_profile"])
-
+            if content.get(
+                "multipath_profile"
+            )
+            is None
+            else str(
+                content["multipath_profile"]
+            )
+        ),
+        multipath_distribution=(
+            multipath_distribution
         ),
     )
-
 
 def main() -> None:
     arguments = parse_arguments()

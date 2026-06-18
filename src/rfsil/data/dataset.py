@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
-from numbers import Integral
+from numbers import Integral, Real
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,10 @@ from rfsil.data.synthetic import (
     SyntheticExampleConfig,
     generate_synthetic_example,
 )
-from rfsil.dsp.channel_profiles import get_multipath_profile
+from rfsil.dsp.channel_profiles import (
+    MULTIPATH_PROFILES,
+    get_multipath_profile,
+)
 
 Float32Array = NDArray[np.float32]
 Int64Array = NDArray[np.int64]
@@ -41,6 +44,7 @@ class DatasetGenerationConfig:
     time_shift_range_samples: tuple[int, int]
     rayleigh_probability: float
     multipath_profile: str | None = None
+    multipath_distribution: dict[str, float] | None = None
 
     def __post_init__(self) -> None:
         """Validate the complete dataset configuration."""
@@ -99,6 +103,15 @@ class DatasetGenerationConfig:
                 "rayleigh_probability must be finite and in the interval [0, 1]."
             )
 
+        if (
+            self.multipath_profile is not None
+            and self.multipath_distribution is not None
+        ):
+            raise ValueError(
+                "multipath_profile and "
+                "multipath_distribution are mutually exclusive."
+            )
+
         if self.multipath_profile is not None:
             selected_profile = get_multipath_profile(
                 self.multipath_profile
@@ -108,6 +121,126 @@ class DatasetGenerationConfig:
                 self,
                 "multipath_profile",
                 selected_profile.name,
+            )
+
+        if self.multipath_distribution is not None:
+            if not isinstance(
+                self.multipath_distribution,
+                dict,
+            ):
+                raise ValueError(
+                    "multipath_distribution must be a mapping."
+                )
+
+            if not self.multipath_distribution:
+                raise ValueError(
+                    "multipath_distribution must not be empty."
+                )
+
+            normalized_distribution: dict[
+                str,
+                float,
+            ] = {}
+
+            for (
+                raw_profile_name,
+                raw_probability,
+            ) in self.multipath_distribution.items():
+                if not isinstance(
+                    raw_profile_name,
+                    str,
+                ):
+                    raise ValueError(
+                        "Multipath distribution profile "
+                        "names must be strings."
+                    )
+
+                profile_name = (
+                    raw_profile_name.strip().lower()
+                )
+
+                if not profile_name:
+                    raise ValueError(
+                        "Multipath distribution profile "
+                        "names must not be empty."
+                    )
+
+                if profile_name == "none":
+                    normalized_name = "none"
+                else:
+                    normalized_name = (
+                        get_multipath_profile(
+                            profile_name
+                        ).name
+                    )
+
+                if normalized_name in normalized_distribution:
+                    raise ValueError(
+                        "multipath_distribution contains "
+                        f"duplicate profile {normalized_name!r}."
+                    )
+
+                if (
+                    isinstance(raw_probability, bool)
+                    or not isinstance(
+                        raw_probability,
+                        Real,
+                    )
+                ):
+                    raise ValueError(
+                        "Multipath distribution "
+                        "probabilities must be numeric."
+                    )
+
+                probability = float(
+                    raw_probability
+                )
+
+                if (
+                    not np.isfinite(probability)
+                    or probability < 0.0
+                ):
+                    raise ValueError(
+                        "Multipath distribution "
+                        "probabilities must be finite "
+                        "and nonnegative."
+                    )
+
+                normalized_distribution[
+                    normalized_name
+                ] = probability
+
+            total_probability = float(
+                sum(
+                    normalized_distribution.values()
+                )
+            )
+
+            if not np.isclose(
+                total_probability,
+                1.0,
+                rtol=0.0,
+                atol=1e-9,
+            ):
+                raise ValueError(
+                    "multipath_distribution "
+                    "probabilities must sum to one."
+                )
+
+            canonical_names = (
+                "none",
+                *MULTIPATH_PROFILES.keys(),
+            )
+            ordered_distribution = {
+                name: normalized_distribution[name]
+                for name in canonical_names
+                if name in normalized_distribution
+            }
+
+            object.__setattr__(
+                self,
+                "multipath_distribution",
+                ordered_distribution,
             )
 
 
@@ -194,6 +327,48 @@ def _draw_child_seed(rng: np.random.Generator) -> int:
     )
 
 
+_MULTIPATH_SELECTION_SALT = 0x4D505448
+
+
+def _sample_multipath_profile(
+    distribution: dict[str, float],
+    example_seed: int,
+) -> str | None:
+    """Select one profile without consuming the split RNG."""
+    selection_seed = np.random.SeedSequence(
+        [
+            int(example_seed),
+            _MULTIPATH_SELECTION_SALT,
+        ]
+    )
+    generator = np.random.default_rng(
+        selection_seed
+    )
+    selection_value = float(
+        generator.random()
+    )
+
+    cumulative_probability = 0.0
+    selected_name = next(
+        reversed(distribution)
+    )
+
+    for profile_name, probability in (
+        distribution.items()
+    ):
+        cumulative_probability += probability
+
+        if selection_value < cumulative_probability:
+            selected_name = profile_name
+            break
+
+    return (
+        None
+        if selected_name == "none"
+        else selected_name
+    )
+
+
 def build_dataset_split(
     configuration: DatasetGenerationConfig,
     examples_per_class_per_snr: int,
@@ -272,6 +447,22 @@ def build_dataset_split(
                     rng.random() < configuration.rayleigh_probability
                 )
 
+                selected_multipath_profile = (
+                    configuration.multipath_profile
+                )
+
+                if (
+                    configuration.multipath_distribution
+                    is not None
+                ):
+                    selected_multipath_profile = (
+                        _sample_multipath_profile(
+                            configuration
+                            .multipath_distribution,
+                            selected_seed,
+                        )
+                    )
+
                 example_configuration = SyntheticExampleConfig(
                     sample_count=configuration.sample_count,
                     sample_rate_hz=configuration.sample_rate_hz,
@@ -285,7 +476,7 @@ def build_dataset_split(
                     time_shift_samples=selected_time_shift,
                     apply_rayleigh_fading=selected_rayleigh_fading,
                     multipath_profile=(
-                        configuration.multipath_profile
+                        selected_multipath_profile
                     ),
                 )
 
