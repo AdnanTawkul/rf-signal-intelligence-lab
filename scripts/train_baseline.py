@@ -21,9 +21,10 @@ from rfsil.data.torch_dataset import (
     create_data_loader,
 )
 from rfsil.models.baseline_cnn import (
-    BaselineCNNConfig,
-    BaselineIQCNN,
     count_trainable_parameters,
+)
+from rfsil.models.model_factory import (
+    create_model_from_mapping,
 )
 from rfsil.training.engine import (
     run_evaluation_epoch,
@@ -202,13 +203,12 @@ def main() -> None:
         ),
     )
 
-    model_configuration = (
-        BaselineCNNConfig.from_mapping(
-            model_content
-        )
+    (
+        model,
+        model_configuration,
+    ) = create_model_from_mapping(
+        model_content
     )
-
-    model = BaselineIQCNN(model_configuration)
 
     initialization_content = content.get(
         "initialization"

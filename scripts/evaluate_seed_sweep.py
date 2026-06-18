@@ -23,9 +23,8 @@ from rfsil.evaluation.seed_test import (
     SeedTestResult,
     aggregate_seed_test_results,
 )
-from rfsil.models.baseline_cnn import (
-    BaselineCNNConfig,
-    BaselineIQCNN,
+from rfsil.models.model_factory import (
+    create_model_from_checkpoint,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -69,18 +68,14 @@ def load_yaml(path: Path) -> dict[str, Any]:
 def build_model_from_checkpoint(
     checkpoint: dict[str, Any],
     device: torch.device,
-) -> BaselineIQCNN:
+) -> torch.nn.Module:
     """Reconstruct a trained model from checkpoint metadata."""
-    model_content = checkpoint["model_configuration"]
-
-    configuration = (
-        BaselineCNNConfig.from_mapping(
-            model_content
-        )
+    model, _ = create_model_from_checkpoint(
+        checkpoint
     )
-
-    model = BaselineIQCNN(configuration)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    model.load_state_dict(
+        checkpoint["model_state_dict"]
+    )
     model.to(device)
 
     return model

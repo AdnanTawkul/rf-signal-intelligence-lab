@@ -20,9 +20,8 @@ from rfsil.evaluation.classification import (
     evaluate_predictions,
 )
 from rfsil.evaluation.prediction_artifacts import save_prediction_results
-from rfsil.models.baseline_cnn import (
-    BaselineCNNConfig,
-    BaselineIQCNN,
+from rfsil.models.model_factory import (
+    create_model_from_mapping,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -154,10 +153,11 @@ def main() -> None:
     )
 
     model_content = checkpoint["model_configuration"]
-    model_configuration = (
-        BaselineCNNConfig.from_mapping(
-            model_content
-        )
+    (
+        model,
+        model_configuration,
+    ) = create_model_from_mapping(
+        model_content
     )
 
     class_names = [
@@ -165,7 +165,6 @@ def main() -> None:
         for name in checkpoint["class_names"]
     ]
 
-    model = BaselineIQCNN(model_configuration)
     model.load_state_dict(
         checkpoint["model_state_dict"]
     )
