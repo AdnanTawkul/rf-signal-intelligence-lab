@@ -80,6 +80,8 @@ def normalize_iq_rms(
 def create_channel_aware_iq_representation(
     inputs: Tensor,
     epsilon: float = 1e-8,
+    include_magnitude: bool = True,
+    include_differential_phase: bool = True,
 ) -> Tensor:
     """Append normalized magnitude and differential phase to raw IQ.
 
@@ -128,6 +130,29 @@ def create_channel_aware_iq_representation(
     if not math.isfinite(epsilon) or epsilon <= 0.0:
         raise ValueError(
             "epsilon must be positive and finite."
+        )
+
+    if not isinstance(include_magnitude, bool):
+        raise TypeError(
+            "include_magnitude must be a boolean."
+        )
+
+    if not isinstance(
+        include_differential_phase,
+        bool,
+    ):
+        raise TypeError(
+            "include_differential_phase must be "
+            "a boolean."
+        )
+
+    if (
+        not include_magnitude
+        and not include_differential_phase
+    ):
+        raise ValueError(
+            "At least one derived IQ channel "
+            "must be enabled."
         )
 
     in_phase = inputs[..., 0, :]
@@ -187,11 +212,22 @@ def create_channel_aware_iq_representation(
         dim=-1,
     )
 
+    derived_channels: list[Tensor] = []
+
+    if include_magnitude:
+        derived_channels.append(
+            normalized_magnitude.unsqueeze(-2)
+        )
+
+    if include_differential_phase:
+        derived_channels.append(
+            phase_difference.unsqueeze(-2)
+        )
+
     return torch.cat(
         (
             inputs,
-            normalized_magnitude.unsqueeze(-2),
-            phase_difference.unsqueeze(-2),
+            *derived_channels,
         ),
         dim=-2,
     )

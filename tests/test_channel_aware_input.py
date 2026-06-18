@@ -226,3 +226,88 @@ def test_invalid_channel_aware_configuration_is_rejected(
         BaselineCNNConfig(
             **configuration,  # type: ignore[arg-type]
         )
+
+
+@pytest.mark.parametrize(
+    (
+        "include_magnitude",
+        "include_differential_phase",
+        "expected_channels",
+    ),
+    [
+        (True, False, 3),
+        (False, True, 3),
+        (True, True, 4),
+    ],
+)
+def test_derived_channel_ablation_shapes(
+    include_magnitude: bool,
+    include_differential_phase: bool,
+    expected_channels: int,
+) -> None:
+    inputs = torch.randn(4, 2, 256)
+
+    outputs = create_channel_aware_iq_representation(
+        inputs,
+        include_magnitude=include_magnitude,
+        include_differential_phase=(
+            include_differential_phase
+        ),
+    )
+
+    assert outputs.shape == (
+        4,
+        expected_channels,
+        256,
+    )
+
+
+def test_transform_rejects_no_derived_channels() -> None:
+    with pytest.raises(
+        ValueError,
+        match="At least one",
+    ):
+        create_channel_aware_iq_representation(
+            torch.randn(2, 128),
+            include_magnitude=False,
+            include_differential_phase=False,
+        )
+
+
+@pytest.mark.parametrize(
+    (
+        "representation",
+        "expected_channels",
+        "expected_parameters",
+    ),
+    [
+        ("iq", 2, 73_092),
+        ("iq_magnitude", 3, 73_316),
+        ("iq_dphase", 3, 73_316),
+        ("iq_magnitude_dphase", 4, 73_540),
+    ],
+)
+def test_representation_feature_channels(
+    representation: str,
+    expected_channels: int,
+    expected_parameters: int,
+) -> None:
+    configuration = BaselineCNNConfig(
+        input_representation=representation
+    )
+    model = BaselineIQCNN(configuration)
+
+    assert (
+        configuration.feature_channels
+        == expected_channels
+    )
+    assert (
+        count_trainable_parameters(model)
+        == expected_parameters
+    )
+
+    logits = model(
+        torch.randn(2, 2, 256)
+    )
+
+    assert logits.shape == (2, 4)

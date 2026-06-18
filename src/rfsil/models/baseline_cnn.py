@@ -75,11 +75,14 @@ class BaselineCNNConfig:
 
         if normalized_representation not in {
             "iq",
+            "iq_magnitude",
+            "iq_dphase",
             "iq_magnitude_dphase",
         }:
             raise ValueError(
-                "input_representation must be either "
-                "'iq' or 'iq_magnitude_dphase'."
+                "input_representation must be one of "
+                "'iq', 'iq_magnitude', 'iq_dphase', "
+                "or 'iq_magnitude_dphase'."
             )
 
         object.__setattr__(
@@ -89,13 +92,12 @@ class BaselineCNNConfig:
         )
 
         if (
-            normalized_representation
-            == "iq_magnitude_dphase"
+            normalized_representation != "iq"
             and self.in_channels != 2
         ):
             raise ValueError(
-                "iq_magnitude_dphase requires exactly "
-                "two raw IQ input channels."
+                "Derived IQ representations require "
+                "exactly two raw IQ input channels."
             )
 
         if (
@@ -131,6 +133,12 @@ class BaselineCNNConfig:
         """Return the channel count entering the first convolution."""
         if self.input_representation == "iq":
             return self.in_channels
+
+        if self.input_representation in {
+            "iq_magnitude",
+            "iq_dphase",
+        }:
+            return 3
 
         return 4
 
@@ -323,13 +331,28 @@ class BaselineIQCNN(nn.Module):
             else inputs
         )
 
-        if (
+        representation = (
             self.configuration.input_representation
-            == "iq_magnitude_dphase"
-        ):
+        )
+
+        if representation != "iq":
             model_inputs = (
                 create_channel_aware_iq_representation(
-                    model_inputs
+                    model_inputs,
+                    include_magnitude=(
+                        representation
+                        in {
+                            "iq_magnitude",
+                            "iq_magnitude_dphase",
+                        }
+                    ),
+                    include_differential_phase=(
+                        representation
+                        in {
+                            "iq_dphase",
+                            "iq_magnitude_dphase",
+                        }
+                    ),
                 )
             )
 
