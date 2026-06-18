@@ -6,12 +6,17 @@ from numbers import Integral
 
 import numpy as np
 
+from rfsil.dsp.channel_profiles import (
+    get_multipath_profile,
+    sample_multipath_tap_gains,
+)
 from rfsil.dsp.impairments import (
     add_awgn,
     apply_amplitude_scaling,
     apply_flat_rayleigh_fading,
     apply_frequency_offset,
     apply_phase_offset,
+    apply_tapped_delay_line,
     apply_time_shift,
 )
 from rfsil.dsp.modulations import ComplexArray, Modulation, generate_iq_signal
@@ -45,6 +50,7 @@ class SyntheticExampleConfig:
     amplitude_scale: float = 1.0
     time_shift_samples: int = 0
     apply_rayleigh_fading: bool = False
+    multipath_profile: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,9 +103,10 @@ def generate_synthetic_example(
     3. Crop a deterministic fixed-length waveform.
     4. Apply amplitude scaling.
     5. Apply optional flat Rayleigh fading.
-    6. Apply carrier frequency and phase offsets.
-    7. Apply zero-padded integer time shift.
-    8. Add AWGN at the requested SNR.
+    6. Apply optional frequency-selective multipath fading.
+    7. Apply carrier frequency and phase offsets.
+    8. Apply zero-padded integer time shift.
+    9. Add AWGN at the requested SNR.
 
     AWGN is applied last so the configured SNR describes the final impaired
     signal before receiver noise.
@@ -132,6 +139,15 @@ def generate_synthetic_example(
 
     if not isinstance(configuration.apply_rayleigh_fading, bool):
         raise ValueError("apply_rayleigh_fading must be a boolean.")
+
+    selected_multipath_profile = None
+
+    if configuration.multipath_profile is not None:
+        selected_multipath_profile = (
+            get_multipath_profile(
+                configuration.multipath_profile
+            )
+        )
 
     rng = np.random.default_rng(seed)
 
@@ -190,6 +206,12 @@ def generate_synthetic_example(
         -crop_start
     ) % samples_per_symbol
 
+    multipath_seed = (
+        _draw_child_seed(rng)
+        if selected_multipath_profile is not None
+        else None
+    )
+
     samples = apply_amplitude_scaling(
         samples,
         amplitude_scale=configuration.amplitude_scale,
@@ -199,6 +221,25 @@ def generate_synthetic_example(
         samples = apply_flat_rayleigh_fading(
             samples,
             seed=fading_seed,
+        )
+
+    if selected_multipath_profile is not None:
+        multipath_tap_gains = (
+            sample_multipath_tap_gains(
+                selected_multipath_profile,
+                seed=multipath_seed,
+                normalize_total_power=True,
+            )
+        )
+
+        samples = apply_tapped_delay_line(
+            samples,
+            tap_delays_samples=(
+                selected_multipath_profile
+                .tap_delays_samples
+            ),
+            tap_gains=multipath_tap_gains,
+            normalize_tap_power=False,
         )
 
     samples = apply_frequency_offset(
