@@ -1,0 +1,13 @@
+experiment_name: baseline_cnn_groupnorm_late_fusion_clean_screen_v1_test
+checkpoint_directory: results/screening_checkpoints/late_fusion
+test_path: data/processed/rf_modulation_baseline_v1/test.npz
+seeds:
+- 2026
+evaluation:
+  batch_size: 256
+  num_workers: 0
+  pin_memory: true
+output:
+  directory: results/baseline_cnn_groupnorm_late_fusion_clean_screen_v1_test
+  figure_path: reports/figures/baseline_cnn_groupnorm_late_fusion_clean_screen_v1_test.png
+  save_predictions: true
