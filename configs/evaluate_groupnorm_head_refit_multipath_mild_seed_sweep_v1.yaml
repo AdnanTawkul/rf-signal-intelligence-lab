@@ -14,3 +14,4 @@ evaluation:
 output:
   directory: results/baseline_cnn_groupnorm_head_refit_multipath_mild_seed_sweep_v1_test
   figure_path: reports/figures/baseline_cnn_groupnorm_head_refit_multipath_mild_seed_sweep_v1_test.png
+  save_predictions: true
