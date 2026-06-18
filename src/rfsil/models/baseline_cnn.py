@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from numbers import Integral
 
 from torch import Tensor, nn
 
-from rfsil.data.transforms import normalize_iq_rms
+from rfsil.data.transforms import (
+    create_channel_aware_iq_representation,
+    normalize_iq_rms,
+)
 
 
 def _validate_positive_integer(value: object, name: str) -> int:
@@ -31,6 +35,7 @@ class BaselineCNNConfig:
     kernel_size: int = 7
     dropout: float = 0.20
     normalize_input_rms: bool = False
+    input_representation: str = "iq"
     normalization: str = "batch"
     group_norm_groups: int = 8
 
@@ -59,6 +64,49 @@ class BaselineCNNConfig:
         if not isinstance(self.normalize_input_rms, bool):
             raise ValueError("normalize_input_rms must be a boolean.")
 
+        if not isinstance(self.input_representation, str):
+            raise ValueError(
+                "input_representation must be a string."
+            )
+
+        normalized_representation = (
+            self.input_representation.strip().lower()
+        )
+
+        if normalized_representation not in {
+            "iq",
+            "iq_magnitude_dphase",
+        }:
+            raise ValueError(
+                "input_representation must be either "
+                "'iq' or 'iq_magnitude_dphase'."
+            )
+
+        object.__setattr__(
+            self,
+            "input_representation",
+            normalized_representation,
+        )
+
+        if (
+            normalized_representation
+            == "iq_magnitude_dphase"
+            and self.in_channels != 2
+        ):
+            raise ValueError(
+                "iq_magnitude_dphase requires exactly "
+                "two raw IQ input channels."
+            )
+
+        if (
+            self.normalize_input_rms
+            and self.in_channels != 2
+        ):
+            raise ValueError(
+                "normalize_input_rms requires exactly "
+                "two raw IQ input channels."
+            )
+
         if self.normalization not in {"batch", "group"}:
             raise ValueError(
                 "normalization must be either 'batch' or 'group'."
@@ -76,6 +124,77 @@ class BaselineCNNConfig:
                         "Every channel count must be divisible by "
                         "group_norm_groups when using GroupNorm."
                     )
+
+
+    @property
+    def feature_channels(self) -> int:
+        """Return the channel count entering the first convolution."""
+        if self.input_representation == "iq":
+            return self.in_channels
+
+        return 4
+
+    @classmethod
+    def from_mapping(
+        cls,
+        content: Mapping[str, object],
+    ) -> BaselineCNNConfig:
+        """Construct a configuration from serialized values."""
+        channels_value = content.get(
+            "channels",
+            (32, 64, 128),
+        )
+
+        if not isinstance(
+            channels_value,
+            (list, tuple),
+        ):
+            raise ValueError(
+                "channels must be a list or tuple."
+            )
+
+        return cls(
+            in_channels=int(
+                content.get("in_channels", 2)
+            ),
+            num_classes=int(
+                content.get("num_classes", 4)
+            ),
+            channels=tuple(
+                int(value)
+                for value in channels_value
+            ),
+            kernel_size=int(
+                content.get("kernel_size", 7)
+            ),
+            dropout=float(
+                content.get("dropout", 0.2)
+            ),
+            normalize_input_rms=bool(
+                content.get(
+                    "normalize_input_rms",
+                    False,
+                )
+            ),
+            input_representation=str(
+                content.get(
+                    "input_representation",
+                    "iq",
+                )
+            ),
+            normalization=str(
+                content.get(
+                    "normalization",
+                    "batch",
+                )
+            ),
+            group_norm_groups=int(
+                content.get(
+                    "group_norm_groups",
+                    8,
+                )
+            ),
+        )
 
 
 def _create_normalization_layer(
@@ -137,12 +256,11 @@ class _ConvBlock(nn.Module):
 class BaselineIQCNN(nn.Module):
     """Compact one-dimensional CNN for RF modulation classification.
 
-    Input tensors must use the shape:
+    Raw input tensors use shape ``[batch, in_channels, samples]``.
 
-        [batch, 2, samples]
-
-    Channel zero contains the in-phase component and channel one contains the
-    quadrature component.
+    The default representation passes I/Q directly to the convolutional
+    encoder. The optional channel-aware representation derives normalized
+    magnitude and differential phase inside the model.
     """
 
     def __init__(
@@ -154,7 +272,7 @@ class BaselineIQCNN(nn.Module):
         self.configuration = configuration or BaselineCNNConfig()
 
         blocks: list[nn.Module] = []
-        current_channels = self.configuration.in_channels
+        current_channels = self.configuration.feature_channels
 
         for output_channels in self.configuration.channels:
             blocks.append(
@@ -204,6 +322,16 @@ class BaselineIQCNN(nn.Module):
             if self.configuration.normalize_input_rms
             else inputs
         )
+
+        if (
+            self.configuration.input_representation
+            == "iq_magnitude_dphase"
+        ):
+            model_inputs = (
+                create_channel_aware_iq_representation(
+                    model_inputs
+                )
+            )
 
         features = self.features(model_inputs)
 

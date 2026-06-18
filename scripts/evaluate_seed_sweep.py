@@ -73,24 +73,10 @@ def build_model_from_checkpoint(
     """Reconstruct a trained model from checkpoint metadata."""
     model_content = checkpoint["model_configuration"]
 
-    configuration = BaselineCNNConfig(
-        in_channels=int(model_content["in_channels"]),
-        num_classes=int(model_content["num_classes"]),
-        channels=tuple(
-            int(value)
-            for value in model_content["channels"]
-        ),
-        kernel_size=int(model_content["kernel_size"]),
-        dropout=float(model_content["dropout"]),
-        normalize_input_rms=bool(
-            model_content.get("normalize_input_rms", False)
-        ),
-        normalization=str(
-            model_content.get("normalization", "batch")
-        ),
-        group_norm_groups=int(
-            model_content.get("group_norm_groups", 8)
-        ),
+    configuration = (
+        BaselineCNNConfig.from_mapping(
+            model_content
+        )
     )
 
     model = BaselineIQCNN(configuration)

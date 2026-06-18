@@ -1,0 +1,11 @@
+experiment_name: baseline_cnn_groupnorm_channel_aware_seed_sweep_v1
+base_training_config: configs/train_baseline_groupnorm_channel_aware_v1.yaml
+seeds:
+- 2026
+- 2027
+- 2028
+- 2029
+- 2030
+output:
+  directory: results/baseline_cnn_groupnorm_channel_aware_seed_sweep_v1
+  figure_path: reports/figures/baseline_cnn_groupnorm_channel_aware_seed_sweep_v1.png
