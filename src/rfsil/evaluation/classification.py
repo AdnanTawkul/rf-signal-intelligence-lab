@@ -164,8 +164,40 @@ def collect_predictions(
     model: nn.Module,
     data_loader: DataLoader,
     device: torch.device,
+    *,
+    input_scale: float = 1.0,
 ) -> PredictionResults:
-    """Run model inference and collect labels, predictions, and SNR values."""
+    """Run inference and collect labels, predictions, and SNR values."""
+    if isinstance(
+        input_scale,
+        (bool, np.bool_),
+    ):
+        raise ValueError(
+            "input_scale must be a positive "
+            "finite number."
+        )
+
+    try:
+        validated_input_scale = float(
+            input_scale
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError(
+            "input_scale must be a positive "
+            "finite number."
+        ) from error
+
+    if (
+        not np.isfinite(
+            validated_input_scale
+        )
+        or validated_input_scale <= 0.0
+    ):
+        raise ValueError(
+            "input_scale must be a positive "
+            "finite number."
+        )
+
     model.eval()
 
     collected_labels: list[Tensor] = []
@@ -191,6 +223,13 @@ def collect_predictions(
                 dtype=torch.float32,
                 non_blocking=True,
             )
+
+            if validated_input_scale != 1.0:
+                inputs = (
+                    inputs
+                    * validated_input_scale
+                )
+
             labels = batch["label"]
             snr_values = batch["snr_db"]
 

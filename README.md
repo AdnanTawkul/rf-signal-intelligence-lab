@@ -1,6 +1,6 @@
 # RF Signal Intelligence Lab
 
-A local, reproducible AI engineering project for RF modulation recognition from synthetic raw IQ signals.
+A local, reproducible AI engineering project for RF modulation recognition from synthetic and public raw IQ datasets.
 
 The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, representation analysis, classifier-head refitting, and deployment-oriented extensions. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
 
@@ -37,10 +37,15 @@ The project currently includes:
 - Paired five-seed evaluation across four channel conditions
 - Correction-magnitude and pooled-confusion analysis
 - RMS-normalization and GroupNorm ablations
+- Deterministic RadioML 2016.10A four-class conversion
+- Zero-shot five-seed external-transfer evaluation
+- Matched 128-sample synthetic control datasets
+- Configurable evaluator-level input scaling
+- Reusable external-transfer metrics and publication-ready figures
 - Automated tests with `pytest`
 - Static analysis with Ruff
 
-For the original clean-channel benchmark, the selected system remains the GroupNorm CNN with a validation-selected frozen linear-head refit. For frequency-selective multipath, the selected maximum-robustness model uses a jointly trained residual signal front end, while a frozen-backbone variant provides parameter-efficient adaptation by training only 2,944 parameters. The next major research milestones are self-supervised representation learning, uncertainty calibration, public-dataset validation, ONNX export, local latency benchmarking, and a Streamlit demo.
+For the original clean-channel benchmark, the selected system remains the GroupNorm CNN with a validation-selected frozen linear-head refit. For frequency-selective multipath, the selected maximum-robustness model uses a jointly trained residual signal front end, while a frozen-backbone variant provides parameter-efficient adaptation by training only 2,944 parameters. For zero-shot transfer to RadioML 2016.10A, the plain mixed-I/Q baseline is selected because it reaches 52.54% accuracy across all 20 SNR levels and 67.03% on the shared six-SNR grid without dataset-specific calibration. A validation-selected `×112` input scale restores the frozen residual model to statistically comparable performance, but that result is treated as a post-hoc diagnostic. The next major research milestones are self-supervised representation learning, uncertainty calibration, ONNX export, local latency benchmarking, and a Streamlit demo.
 
 ## Selected Supervised Baseline
 
@@ -118,6 +123,48 @@ Both approaches substantially reduce the dominant QPSK/8PSK-to-16QAM failure pat
 ![Mixed-IQ baseline versus frozen-backbone residual front end](reports/figures/frozen_backbone_equalizer_comparison_v1.png)
 
 Detailed architecture, training protocols, correction analysis, paired-seed results, SNR analysis, and pooled confusion matrices are documented in [Learnable Residual Signal Front End v1](reports/learnable_residual_front_end_v1.md).
+
+
+## RadioML 2016.10A External Transfer
+
+The external-validation milestone evaluates the existing synthetic-trained models on a deterministic four-class subset of RadioML 2016.10A.
+
+The selected classes are BPSK, QPSK, 8PSK, and 16QAM. The conversion pipeline preserves RadioML's native `128`-sample windows and creates balanced splits inside every class/SNR group:
+
+| Split | Examples per class/SNR group | Total examples |
+|---|---:|---:|
+| Train | 700 | 56,000 |
+| Validation | 150 | 12,000 |
+| Test | 150 | 12,000 |
+
+### External-Transfer Results
+
+Two views are reported:
+
+- **All SNRs:** all 20 RadioML levels from `-20 dB` through `18 dB`
+- **Shared grid:** `-4, 0, 4, 8, 12, 16 dB`
+
+| Model | All SNRs | Shared grid |
+|---|---:|---:|
+| Mixed-IQ baseline | **52.54% ± 3.82%** | **67.03% ± 5.65%** |
+| Joint residual, unscaled | 44.77% ± 2.59% | 54.86% ± 4.26% |
+| Joint residual, ×40 | 46.40% ± 2.16% | 57.68% ± 3.64% |
+| Frozen residual, unscaled | 40.37% ± 3.08% | 49.34% ± 4.74% |
+| Frozen residual, ×112 | **52.89% ± 3.95%** | **67.38% ± 5.93%** |
+
+The plain mixed-I/Q model is the selected **zero-shot external-transfer model** because it reaches the best baseline-level performance without dataset-specific calibration.
+
+The frozen residual model is highly sensitive to the much smaller RadioML input amplitude. A validation-selected `×112` multiplier improves its all-SNR result by 12.52 percentage points and restores performance to the baseline level on all five paired seeds. This scaled result is explicitly treated as a **post-hoc amplitude-sensitivity diagnostic**, not an untouched confirmatory result.
+
+The jointly trained residual model remains the selected system for maximum synthetic multipath robustness, but it is more sensitive to the shift from 2,048-sample training windows to 128-sample external windows.
+
+![RadioML 2016.10A overall external-transfer comparison](reports/figures/radioml2016_external_transfer_overall_v1.png)
+
+![RadioML 2016.10A accuracy by SNR](reports/figures/radioml2016_external_transfer_snr_v1.png)
+
+![RadioML 2016.10A per-class accuracy](reports/figures/radioml2016_external_transfer_classes_v1.png)
+
+Detailed conversion methodology, matched short-window controls, amplitude analysis, paired-seed comparisons, limitations, and model-selection decisions are documented in [RadioML 2016.10A External Transfer Evaluation v1](reports/radioml2016_external_transfer_v1.md).
 
 ## Why the Frozen Head Refit Was Selected
 
@@ -472,6 +519,49 @@ Generate the consolidated frozen-backbone comparison:
 python scripts\compare_multipath_mitigation.py --config configs\compare_frozen_backbone_equalizer_v1.yaml
 ```
 
+
+## Reproduce the RadioML External-Transfer Evaluation
+
+The raw RadioML archive and generated NPZ datasets are excluded from Git.
+
+### Convert the four-class RadioML subset
+
+```powershell
+python scripts\convert_radioml2016.py `
+  --config configs\dataset_radioml2016_four_class_v1.yaml
+```
+
+### Run the unscaled five-seed evaluations
+
+```powershell
+$configs = @(
+    "configs\evaluate_radioml2016_mixed_iq_baseline_seed_sweep_v1.yaml",
+    "configs\evaluate_radioml2016_joint_residual_equalizer_seed_sweep_v1.yaml",
+    "configs\evaluate_radioml2016_frozen_backbone_equalizer_seed_sweep_v1.yaml"
+)
+
+foreach ($config in $configs) {
+    python scripts\evaluate_seed_sweep.py --config $config
+}
+```
+
+### Run the validation-selected scale diagnostics
+
+```powershell
+python scripts\evaluate_seed_sweep.py `
+  --config configs\evaluate_radioml2016_joint_residual_equalizer_scaled_x40_seed_sweep_v1.yaml
+
+python scripts\evaluate_seed_sweep.py `
+  --config configs\evaluate_radioml2016_frozen_backbone_equalizer_scaled_x112_seed_sweep_v1.yaml
+```
+
+### Regenerate the consolidated analysis
+
+```powershell
+python scripts\analyze_radioml2016_external_transfer.py `
+  --config configs\compare_radioml2016_external_transfer_v1.yaml
+```
+
 ## Reproduce Historical Ablations
 
 ### Original BatchNorm five-seed study
@@ -515,7 +605,7 @@ Check whitespace and patch integrity:
 git diff --check
 ```
 
-At the current milestone, the repository contains **548 passing tests**.
+At the current milestone, the repository contains **571 passing tests**.
 
 ## Repository Structure
 
@@ -580,10 +670,10 @@ It does not include:
 
 ## Known Limitations
 
-- The current benchmark is entirely synthetic.
-- Training and test data come from the same signal-generator family.
+- The project now includes external validation on RadioML 2016.10A, but RadioML is itself a synthetic generator benchmark rather than over-the-air captured data.
 - Real receiver effects and hardware-specific distortions are not yet represented fully.
-- Public RF datasets have not yet been integrated.
+- RadioML windows contain 128 samples, while the original models were trained on 2,048-sample windows.
+- The validation-selected input-scale experiments are post-hoc diagnostics rather than untouched confirmatory evaluations.
 - Low-SNR and severe-multipath PSK discrimination remain the dominant failure regimes.
 - Residual front ends reduce, but do not eliminate, QPSK/8PSK confusion and PSK-to-16QAM collapse under severe multipath.
 - The learned front-end transformations are not established physical channel inverses.
@@ -625,6 +715,12 @@ It does not include:
 - [x] Five-seed residual-front-end robustness studies
 - [x] Correction-magnitude and pooled-confusion analysis
 - [x] Automated testing and Ruff checks
+- [x] RadioML 2016.10A restricted loader and deterministic conversion
+- [x] Four-class public-dataset train, validation, and test splits
+- [x] Five-seed zero-shot external-transfer evaluation
+- [x] Matched 128-sample synthetic control experiments
+- [x] Validation-only input-scale diagnostics
+- [x] Consolidated external-transfer analysis and report
 
 ### Next
 
@@ -633,11 +729,11 @@ It does not include:
 - [ ] Uncertainty estimation
 - [ ] Self-supervised contrastive encoder
 - [ ] Self-supervised linear evaluation and fine-tuning
-- [ ] Public RF dataset integration
 - [ ] ONNX export
 - [ ] Local latency benchmark
 - [ ] Streamlit demo
-- [ ] Final technical report and GitHub release
+- [ ] Milestone README finalization and GitHub release
+- [ ] Final project-wide technical report
 
 ## License
 
