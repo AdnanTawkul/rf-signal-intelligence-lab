@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from numbers import Integral
+from typing import Self
 
 from torch import Tensor, nn
 
@@ -454,6 +455,38 @@ class ResidualEqualizerIQCNN(nn.Module):
             self.configuration
             .create_backbone_configuration()
         )
+        self._backbone_frozen = False
+
+
+    @property
+    def backbone_frozen(self) -> bool:
+        """Return whether the classifier backbone is frozen."""
+        return self._backbone_frozen
+
+    def freeze_backbone(self) -> None:
+        """Freeze the complete classifier backbone."""
+        for parameter in self.backbone.parameters():
+            parameter.requires_grad_(False)
+
+        self._backbone_frozen = True
+        self.backbone.eval()
+
+    def unfreeze_backbone(self) -> None:
+        """Restore backbone gradient updates."""
+        for parameter in self.backbone.parameters():
+            parameter.requires_grad_(True)
+
+        self._backbone_frozen = False
+        self.backbone.train(self.training)
+
+    def train(self, mode: bool = True) -> Self:
+        """Set training mode while keeping a frozen backbone fixed."""
+        super().train(mode)
+
+        if self._backbone_frozen:
+            self.backbone.eval()
+
+        return self
 
     @property
     def classifier(self) -> nn.Module:

@@ -26,12 +26,17 @@ from rfsil.models.baseline_cnn import (
 from rfsil.models.model_factory import (
     create_model_from_mapping,
 )
+from rfsil.training.backbone_initialization import (
+    initialize_frozen_backbone_from_checkpoint,
+)
 from rfsil.training.engine import (
     run_evaluation_epoch,
     run_training_epoch,
     set_global_seed,
 )
-from rfsil.training.initialization import initialize_encoder_from_ssl_checkpoint
+from rfsil.training.initialization import (
+    initialize_encoder_from_ssl_checkpoint,
+)
 from rfsil.training.losses import ClassSNRWeightedCrossEntropyLoss
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -223,67 +228,158 @@ def main() -> None:
             dict,
         ):
             raise ValueError(
-                "initialization must be a YAML mapping."
+                "initialization must be "
+                "a YAML mapping."
             )
 
-        encoder_checkpoint_value = (
+        initialization_type = str(
             initialization_content.get(
-                "encoder_checkpoint_path"
+                "type",
+                "ssl_encoder",
             )
-        )
+        ).strip().lower()
 
-        if encoder_checkpoint_value is None:
-            raise ValueError(
-                "initialization.encoder_checkpoint_path "
-                "is required."
-            )
-
-        initialization_path = resolve_project_path(
-            str(encoder_checkpoint_value)
-        )
-
-        imported_initialization = (
-            initialize_encoder_from_ssl_checkpoint(
-                model,
-                initialization_path,
-            )
-        )
-
-        resolved_initialization_path = (
-            initialization_path.resolve()
-        )
-
-        try:
-            serialized_initialization_path = (
-                resolved_initialization_path
-                .relative_to(
-                    PROJECT_ROOT.resolve()
+        if initialization_type == "ssl_encoder":
+            checkpoint_value = (
+                initialization_content.get(
+                    "encoder_checkpoint_path"
                 )
-                .as_posix()
-            )
-        except ValueError:
-            serialized_initialization_path = (
-                resolved_initialization_path.as_posix()
             )
 
-        initialization_metadata = {
-            "type": "ssl_encoder",
-            "method": (
-                imported_initialization.method
-            ),
-            "experiment_name": (
-                imported_initialization
-                .experiment_name
-            ),
-            "seed": imported_initialization.seed,
-            "best_epoch": (
-                imported_initialization.best_epoch
-            ),
-            "encoder_checkpoint_path": (
-                serialized_initialization_path
-            ),
-            "classifier_initialized_fresh": True,
-        }
+            if checkpoint_value is None:
+                raise ValueError(
+                    "initialization."
+                    "encoder_checkpoint_path "
+                    "is required."
+                )
+
+            initialization_path = (
+                resolve_project_path(
+                    str(checkpoint_value)
+                )
+            )
+
+            imported_initialization = (
+                initialize_encoder_from_ssl_checkpoint(
+                    model,
+                    initialization_path,
+                )
+            )
+
+            resolved_path = (
+                initialization_path.resolve()
+            )
+
+            try:
+                serialized_path = (
+                    resolved_path
+                    .relative_to(
+                        PROJECT_ROOT.resolve()
+                    )
+                    .as_posix()
+                )
+            except ValueError:
+                serialized_path = (
+                    resolved_path.as_posix()
+                )
+
+            initialization_metadata = {
+                "type": "ssl_encoder",
+                "method": (
+                    imported_initialization.method
+                ),
+                "experiment_name": (
+                    imported_initialization
+                    .experiment_name
+                ),
+                "seed": (
+                    imported_initialization.seed
+                ),
+                "best_epoch": (
+                    imported_initialization
+                    .best_epoch
+                ),
+                "encoder_checkpoint_path": (
+                    serialized_path
+                ),
+                "classifier_initialized_fresh": True,
+            }
+
+        elif initialization_type == (
+            "frozen_supervised_backbone"
+        ):
+            checkpoint_value = (
+                initialization_content.get(
+                    "checkpoint_path"
+                )
+            )
+
+            if checkpoint_value is None:
+                raise ValueError(
+                    "initialization.checkpoint_path "
+                    "is required."
+                )
+
+            initialization_path = (
+                resolve_project_path(
+                    str(checkpoint_value)
+                )
+            )
+
+            imported_initialization = (
+                initialize_frozen_backbone_from_checkpoint(
+                    model,
+                    initialization_path,
+                )
+            )
+
+            resolved_path = (
+                initialization_path.resolve()
+            )
+
+            try:
+                serialized_path = (
+                    resolved_path
+                    .relative_to(
+                        PROJECT_ROOT.resolve()
+                    )
+                    .as_posix()
+                )
+            except ValueError:
+                serialized_path = (
+                    resolved_path.as_posix()
+                )
+
+            initialization_metadata = {
+                "type": (
+                    "frozen_supervised_backbone"
+                ),
+                "method": (
+                    "supervised_baseline_backbone"
+                ),
+                "experiment_name": (
+                    imported_initialization
+                    .experiment_name
+                ),
+                "seed": (
+                    imported_initialization.seed
+                ),
+                "best_epoch": (
+                    imported_initialization
+                    .best_epoch
+                ),
+                "checkpoint_path": (
+                    serialized_path
+                ),
+                "backbone_frozen": True,
+                "classifier_initialized_fresh": False,
+            }
+
+        else:
+            raise ValueError(
+                "Unsupported initialization type: "
+                f"{initialization_type!r}."
+            )
 
     model = model.to(device)
     loss_function = nn.CrossEntropyLoss()
@@ -375,8 +471,19 @@ def main() -> None:
             "snr_tolerance": targeted_loss.snr_tolerance,
         }
 
+    trainable_parameters = [
+        parameter
+        for parameter in model.parameters()
+        if parameter.requires_grad
+    ]
+
+    if not trainable_parameters:
+        raise ValueError(
+            "The model has no trainable parameters."
+        )
+
     optimizer = AdamW(
-        model.parameters(),
+        trainable_parameters,
         lr=learning_rate,
         weight_decay=weight_decay,
     )
@@ -433,7 +540,10 @@ def main() -> None:
 
     if initialization_metadata is None:
         print("Initialization: random")
-    else:
+    elif (
+        initialization_metadata["type"]
+        == "ssl_encoder"
+    ):
         print(
             "Initialization: "
             f"{initialization_metadata['method']} "
@@ -441,10 +551,27 @@ def main() -> None:
         )
         print(
             "Initialization checkpoint: "
-            f"{initialization_metadata['encoder_checkpoint_path']}"
+            f"{initialization_metadata[
+                'encoder_checkpoint_path'
+            ]}"
         )
         print(
             "Classifier initialized fresh: yes"
+        )
+    else:
+        print(
+            "Initialization: frozen supervised "
+            "backbone"
+        )
+        print(
+            "Initialization checkpoint: "
+            f"{initialization_metadata[
+                'checkpoint_path'
+            ]}"
+        )
+        print("Backbone frozen: yes")
+        print(
+            "Classifier initialized fresh: no"
         )
 
     for epoch in range(1, epochs + 1):
