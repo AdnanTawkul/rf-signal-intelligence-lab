@@ -14,16 +14,28 @@ from rfsil.deployment.prediction import (
     validate_top_k,
     write_prediction_document,
 )
+from rfsil.deployment.windowing import (
+    SignalPrediction,
+    WindowedIQ,
+    aggregate_window_predictions,
+    predict_window_batches,
+    window_iq_signal,
+)
 
 __all__ = [
     "BatchPrediction",
     "IQInferenceEngine",
     "LoadedIQ",
+    "SignalPrediction",
     "WindowPrediction",
+    "WindowedIQ",
+    "aggregate_window_predictions",
     "build_prediction_document",
     "load_iq_file",
+    "predict_window_batches",
     "rank_probabilities",
     "resolve_device",
     "validate_top_k",
+    "window_iq_signal",
     "write_prediction_document",
 ]
