@@ -1,0 +1,80 @@
+experiment_name: radioml2016_external_transfer_v1
+
+shared_snr_grid_db:
+  - -4
+  - 0
+  - 4
+  - 8
+  - 12
+  - 16
+
+models:
+  mixed_iq_baseline:
+    display_name: Mixed-IQ baseline
+    aggregate_metrics: results/radioml2016_mixed_iq_baseline_seed_sweep_v1_test/aggregate_metrics.json
+
+  joint_residual_unscaled:
+    display_name: Joint residual, unscaled
+    aggregate_metrics: results/radioml2016_joint_residual_equalizer_seed_sweep_v1_test/aggregate_metrics.json
+
+  joint_residual_scaled_x40:
+    display_name: Joint residual, x40
+    aggregate_metrics: results/radioml2016_joint_residual_equalizer_scaled_x40_seed_sweep_v1_test/aggregate_metrics.json
+
+  frozen_residual_unscaled:
+    display_name: Frozen residual, unscaled
+    aggregate_metrics: results/radioml2016_frozen_backbone_equalizer_seed_sweep_v1_test/aggregate_metrics.json
+
+  frozen_residual_scaled_x112:
+    display_name: Frozen residual, x112
+    aggregate_metrics: results/radioml2016_frozen_backbone_equalizer_scaled_x112_seed_sweep_v1_test/aggregate_metrics.json
+
+display_order:
+  - mixed_iq_baseline
+  - joint_residual_unscaled
+  - joint_residual_scaled_x40
+  - frozen_residual_unscaled
+  - frozen_residual_scaled_x112
+
+detail_order:
+  - mixed_iq_baseline
+  - joint_residual_scaled_x40
+  - frozen_residual_scaled_x112
+
+paired_comparisons:
+  joint_scaling:
+    display_name: Joint residual x40 minus unscaled
+    reference: joint_residual_unscaled
+    candidate: joint_residual_scaled_x40
+
+  frozen_scaling:
+    display_name: Frozen residual x112 minus unscaled
+    reference: frozen_residual_unscaled
+    candidate: frozen_residual_scaled_x112
+
+  frozen_scaled_vs_baseline:
+    display_name: Frozen residual x112 minus baseline
+    reference: mixed_iq_baseline
+    candidate: frozen_residual_scaled_x112
+
+synthetic_controls:
+  mixed_iq_baseline:
+    display_name: Baseline RadioML minus synthetic-128
+    synthetic_metrics: results/synthetic128_clean_mixed_iq_baseline_seed_sweep_v1_test/aggregate_metrics.json
+    external_model: mixed_iq_baseline
+
+  joint_residual:
+    display_name: Joint x40 RadioML minus synthetic-128
+    synthetic_metrics: results/synthetic128_clean_joint_residual_equalizer_seed_sweep_v1_test/aggregate_metrics.json
+    external_model: joint_residual_scaled_x40
+
+  frozen_residual:
+    display_name: Frozen x112 RadioML minus synthetic-128
+    synthetic_metrics: results/synthetic128_clean_frozen_backbone_equalizer_seed_sweep_v1_test/aggregate_metrics.json
+    external_model: frozen_residual_scaled_x112
+
+output:
+  summary_json: results/radioml2016_external_transfer_v1/summary.json
+  overall_figure: reports/figures/radioml2016_external_transfer_overall_v1.png
+  snr_figure: reports/figures/radioml2016_external_transfer_snr_v1.png
+  class_figure: reports/figures/radioml2016_external_transfer_classes_v1.png
