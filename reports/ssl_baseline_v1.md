@@ -87,13 +87,13 @@ The low-label subset is selected jointly by modulation class and SNR:
 
 The historical low-label configurations use batch size `128` with `drop_last=False`. The 280-example subset therefore produces three optimizer updates per epoch, and 330 epochs produce 990 updates. The 5,600-example full-data baseline produces 44 updates per epoch and 1,320 updates over 30 epochs. Consequently, the historical `steps_matched` experiment names are retained for reproducibility, but the runs are not exactly step-matched to the full-data baseline. They should be interpreted as paired comparisons under an identical 990-update low-label budget.
 
-For every paired seed, random, SimCLR, and VICReg use the same training seed and subset-selection seed.
+For every nominal paired seed, random, SimCLR, and VICReg use the same subset-selection seed. A historical runner bug wrote the varying seed to `training.seed`, which `train_baseline.py` does not read, while the top-level `seed` remained `2026`. Consequently, supervised initialization and DataLoader shuffling used seed `2026` for every run. Only the labeled subset varied across the nominal seeds.
 
-The same fixed SimCLR and VICReg pretrained checkpoints are reused across all five downstream seeds. The reported variation therefore measures labeled-subset and supervised-training variation, but does not include SSL-pretraining variation.
+The same fixed SimCLR and VICReg pretrained checkpoints are also reused across all five subsets. The reported variation therefore measures labeled-subset variation under fixed supervised and SSL initialization. It does not include supervised-training-seed or SSL-pretraining variation.
 
-## Five-seed paired low-label results
+## Five-subset paired low-label results
 
-Seeds: `2026`, `2027`, `2028`, `2029`, and `2030`.
+Subset seeds: `2026`, `2027`, `2028`, `2029`, and `2030`. The supervised training seed remained fixed at `2026`.
 
 | Initialization | Mean validation accuracy | Standard deviation |
 |---|---:|---:|
@@ -138,7 +138,7 @@ The SSL branch adds reusable infrastructure for:
 - Fresh supervised classifier initialization
 - Deterministic class-SNR stratified subsets
 - Paired low-label comparisons under a shared 990-update budget
-- Paired five-seed evaluation
+- Paired five-subset evaluation with fixed supervised training seed
 - Reproducible checkpoints, summaries, histories, and figures
 
 ## Reproduction
