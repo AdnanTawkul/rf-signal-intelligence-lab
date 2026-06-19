@@ -284,15 +284,22 @@ def save_paired_change_figure(
         )
     )
 
+    matrix_percentage_points = (
+        100.0 * matrix
+    )
     maximum = float(
-        np.max(np.abs(matrix))
+        np.max(
+            np.abs(
+                matrix_percentage_points
+            )
+        )
     )
 
     figure, axis = plt.subplots(
         figsize=(10, 6)
     )
     image = axis.imshow(
-        matrix,
+        matrix_percentage_points,
         aspect="auto",
         vmin=-maximum,
         vmax=maximum,
@@ -325,7 +332,9 @@ def save_paired_change_figure(
             axis.text(
                 column,
                 row,
-                f"{100.0 * matrix[row, column]:+.2f}",
+                (
+                    f"{matrix_percentage_points[row, column]:+.2f}"
+                ),
                 ha="center",
                 va="center",
             )
@@ -333,7 +342,10 @@ def save_paired_change_figure(
     figure.colorbar(
         image,
         ax=axis,
-        label="Accuracy change",
+        label=(
+            "Accuracy change "
+            "(percentage points)"
+        ),
     )
     figure.tight_layout()
     figure.savefig(
@@ -348,6 +360,9 @@ def save_paired_change_figure(
             fraction_identifiers
         ),
         "values": matrix.tolist(),
+        "values_percentage_points": (
+            matrix_percentage_points.tolist()
+        ),
     }
 
 
@@ -384,6 +399,7 @@ def save_confusion_figure(
     comparisons: list[dict[str, object]],
     metrics_root: Path,
     seeds: list[int],
+    methods: dict[str, str],
     output_path: Path,
 ) -> dict[str, object]:
     """Plot selected pooled confusion matrices."""
@@ -475,6 +491,12 @@ def save_confusion_figure(
                 dtype=np.float64,
             )
             axis = axes[row, column]
+            method_display_name = (
+                methods.get(
+                    method,
+                    method,
+                )
+            )
             image = axis.imshow(
                 matrix,
                 vmin=0.0,
@@ -483,7 +505,7 @@ def save_confusion_figure(
 
             axis.set_title(
                 f"{display_name}\n"
-                f"{method.upper()} ? "
+                f"{method_display_name} | "
                 f"{pooled['mean_accuracy']:.3f}"
             )
             axis.set_xlabel(
@@ -651,6 +673,7 @@ def main() -> None:
             ),
             metrics_root=metrics_root,
             seeds=seeds,
+            methods=methods,
             output_path=output_paths[
                 "confusion_figure"
             ],
