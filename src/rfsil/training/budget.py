@@ -143,13 +143,14 @@ def derive_training_budget(
             "steps_per_epoch."
         )
 
-    if remainder == 0:
-        epochs = quotient
-    else:
-        epochs = math.ceil(
+    epochs = (
+        quotient
+        if remainder == 0
+        else math.ceil(
             validated_target_steps
             / steps_per_epoch
         )
+    )
 
     actual_optimizer_steps = (
         epochs * steps_per_epoch
