@@ -13,10 +13,10 @@ class TrainingBudget:
     batch_size: int
     drop_last: bool
     steps_per_epoch: int
-    target_optimizer_steps: int
+    target_optimizer_steps: int | None
     epochs: int
     actual_optimizer_steps: int
-    exact_match: bool
+    exact_match: bool | None
 
 
 def _validate_positive_integer(
@@ -177,8 +177,99 @@ def derive_training_budget(
     )
 
 
+def resolve_training_budget(
+    *,
+    example_count: int,
+    batch_size: int,
+    epochs: object | None = None,
+    target_optimizer_steps: object | None = None,
+    drop_last: bool = False,
+    require_exact: bool = True,
+) -> TrainingBudget:
+    """Resolve a fixed-epoch or target-step training budget."""
+    if not isinstance(require_exact, bool):
+        raise ValueError(
+            "require_exact must be a boolean."
+        )
+
+    validated_epochs = (
+        None
+        if epochs is None
+        else _validate_positive_integer(
+            epochs,
+            "epochs",
+        )
+    )
+    validated_target_steps = (
+        None
+        if target_optimizer_steps is None
+        else _validate_positive_integer(
+            target_optimizer_steps,
+            "target_optimizer_steps",
+        )
+    )
+
+    if (
+        validated_epochs is None
+        and validated_target_steps is None
+    ):
+        raise ValueError(
+            "Either epochs or target_optimizer_steps "
+            "must be provided."
+        )
+
+    steps_per_epoch = calculate_steps_per_epoch(
+        example_count=example_count,
+        batch_size=batch_size,
+        drop_last=drop_last,
+    )
+
+    if validated_target_steps is not None:
+        derived = derive_training_budget(
+            example_count=example_count,
+            batch_size=batch_size,
+            target_optimizer_steps=(
+                validated_target_steps
+            ),
+            drop_last=drop_last,
+            require_exact=require_exact,
+        )
+
+        if (
+            validated_epochs is not None
+            and validated_epochs != derived.epochs
+        ):
+            raise ValueError(
+                "Configured epochs do not match the "
+                "derived target-step budget: "
+                f"configured={validated_epochs}, "
+                f"derived={derived.epochs}."
+            )
+
+        return derived
+
+    if validated_epochs is None:
+        raise RuntimeError(
+            "Validated epochs are unexpectedly missing."
+        )
+
+    return TrainingBudget(
+        example_count=int(example_count),
+        batch_size=int(batch_size),
+        drop_last=drop_last,
+        steps_per_epoch=steps_per_epoch,
+        target_optimizer_steps=None,
+        epochs=validated_epochs,
+        actual_optimizer_steps=(
+            validated_epochs * steps_per_epoch
+        ),
+        exact_match=None,
+    )
+
+
 __all__ = [
     "TrainingBudget",
     "calculate_steps_per_epoch",
     "derive_training_budget",
+    "resolve_training_budget",
 ]

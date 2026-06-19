@@ -29,6 +29,7 @@ from rfsil.models.model_factory import (
 from rfsil.training.backbone_initialization import (
     initialize_frozen_backbone_from_checkpoint,
 )
+from rfsil.training.budget import resolve_training_budget
 from rfsil.training.engine import (
     run_evaluation_epoch,
     run_training_epoch,
@@ -118,15 +119,44 @@ def main() -> None:
         else int(content["seed"])
     )
 
-    epochs = int(training_content["epochs"])
+    epochs_value = training_content.get(
+        "epochs"
+    )
+    target_optimizer_steps_value = (
+        training_content.get(
+            "target_optimizer_steps"
+        )
+    )
+    require_exact_optimizer_steps = (
+        training_content.get(
+            "require_exact_optimizer_steps",
+            True,
+        )
+    )
+    drop_last = training_content.get(
+        "drop_last",
+        False,
+    )
+
     batch_size = int(training_content["batch_size"])
     learning_rate = float(training_content["learning_rate"])
     weight_decay = float(training_content["weight_decay"])
     num_workers = int(training_content["num_workers"])
     pin_memory = bool(training_content["pin_memory"])
 
-    if epochs <= 0:
-        raise ValueError("epochs must be positive.")
+    if not isinstance(drop_last, bool):
+        raise ValueError(
+            "training.drop_last must be a boolean."
+        )
+
+    if not isinstance(
+        require_exact_optimizer_steps,
+        bool,
+    ):
+        raise ValueError(
+            "training.require_exact_optimizer_steps "
+            "must be a boolean."
+        )
 
     set_global_seed(seed)
 
@@ -187,6 +217,23 @@ def main() -> None:
         }
 
 
+    training_budget = resolve_training_budget(
+        example_count=len(train_dataset),
+        batch_size=batch_size,
+        epochs=epochs_value,
+        target_optimizer_steps=(
+            target_optimizer_steps_value
+        ),
+        drop_last=drop_last,
+        require_exact=(
+            require_exact_optimizer_steps
+        ),
+    )
+    training_budget_metadata = asdict(
+        training_budget
+    )
+    epochs = training_budget.epochs
+
     train_loader = create_data_loader(
         train_dataset,
         DataLoaderConfig(
@@ -194,9 +241,19 @@ def main() -> None:
             shuffle=True,
             num_workers=num_workers,
             pin_memory=pin_memory and torch.cuda.is_available(),
+            drop_last=drop_last,
             seed=seed,
         ),
     )
+    if (
+        len(train_loader)
+        != training_budget.steps_per_epoch
+    ):
+        raise RuntimeError(
+            "Resolved training steps do not "
+            "match the DataLoader length."
+        )
+
     validation_loader = create_data_loader(
         validation_dataset,
         DataLoaderConfig(
@@ -534,6 +591,26 @@ def main() -> None:
         )
     print(f"Validation examples: {len(validation_dataset)}")
     print(
+        "Training batches per epoch: "
+        f"{training_budget.steps_per_epoch}"
+    )
+    print(
+        "Training epochs: "
+        f"{training_budget.epochs}"
+    )
+    print(
+        "Target optimizer steps: "
+        f"{training_budget.target_optimizer_steps}"
+    )
+    print(
+        "Actual optimizer steps: "
+        f"{training_budget.actual_optimizer_steps}"
+    )
+    print(
+        "Exact target match: "
+        f"{training_budget.exact_match}"
+    )
+    print(
         "Trainable parameters: "
         f"{count_trainable_parameters(model)}"
     )
@@ -638,6 +715,7 @@ def main() -> None:
             "seed": seed,
             "initialization": initialization_metadata,
             "labeled_subset": labeled_subset_metadata,
+            "training_budget": training_budget_metadata,
         },
         checkpoint_path,
     )
@@ -656,6 +734,7 @@ def main() -> None:
         "seed": seed,
         "initialization": initialization_metadata,
         "labeled_subset": labeled_subset_metadata,
+        "training_budget": training_budget_metadata,
         "epochs": epochs,
         "best_epoch": best_epoch,
         "best_validation_accuracy": best_validation_accuracy,

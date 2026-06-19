@@ -5,6 +5,7 @@ import pytest
 from rfsil.training.budget import (
     calculate_steps_per_epoch,
     derive_training_budget,
+    resolve_training_budget,
 )
 
 
@@ -157,4 +158,67 @@ def test_rejects_nonboolean_exact_flag() -> None:
             batch_size=128,
             target_optimizer_steps=1320,
             require_exact=1,
+        )
+
+def test_resolves_fixed_epoch_budget() -> None:
+    budget = resolve_training_budget(
+        example_count=280,
+        batch_size=128,
+        epochs=330,
+    )
+
+    assert budget.steps_per_epoch == 3
+    assert budget.epochs == 330
+    assert budget.target_optimizer_steps is None
+    assert budget.actual_optimizer_steps == 990
+    assert budget.exact_match is None
+
+
+def test_resolves_target_only_budget() -> None:
+    budget = resolve_training_budget(
+        example_count=280,
+        batch_size=128,
+        target_optimizer_steps=1320,
+    )
+
+    assert budget.steps_per_epoch == 3
+    assert budget.epochs == 440
+    assert budget.target_optimizer_steps == 1320
+    assert budget.actual_optimizer_steps == 1320
+    assert budget.exact_match is True
+
+
+def test_accepts_matching_epochs_and_target() -> None:
+    budget = resolve_training_budget(
+        example_count=560,
+        batch_size=128,
+        epochs=264,
+        target_optimizer_steps=1320,
+    )
+
+    assert budget.epochs == 264
+    assert budget.actual_optimizer_steps == 1320
+
+
+def test_rejects_mismatched_epochs_and_target() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Configured epochs do not match",
+    ):
+        resolve_training_budget(
+            example_count=280,
+            batch_size=128,
+            epochs=330,
+            target_optimizer_steps=1320,
+        )
+
+
+def test_requires_epochs_or_target_steps() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Either epochs",
+    ):
+        resolve_training_budget(
+            example_count=280,
+            batch_size=128,
         )
