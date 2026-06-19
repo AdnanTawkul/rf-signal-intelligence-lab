@@ -42,10 +42,17 @@ The project currently includes:
 - Matched 128-sample synthetic control datasets
 - Configurable evaluator-level input scaling
 - Reusable external-transfer metrics and publication-ready figures
+- SimCLR and VICReg self-supervised pretraining
+- Exact optimizer-step label-efficiency experiments at 1%, 5%, 10%, 25%, and 100% labels
+- Resumable 75-run downstream training and 300-evaluation held-out test matrix
+- Paired SSL-versus-random analysis across clean, mild, moderate, and severe conditions
+- Pooled confusion-matrix analysis for selected SSL systems
 - Automated tests with `pytest`
 - Static analysis with Ruff
 
-For the original clean-channel benchmark, the selected system remains the GroupNorm CNN with a validation-selected frozen linear-head refit. For frequency-selective multipath, the selected maximum-robustness model uses a jointly trained residual signal front end, while a frozen-backbone variant provides parameter-efficient adaptation by training only 2,944 parameters. For zero-shot transfer to RadioML 2016.10A, the plain mixed-I/Q baseline is selected because it reaches 52.54% accuracy across all 20 SNR levels and 67.03% on the shared six-SNR grid without dataset-specific calibration. A validation-selected `×112` input scale restores the frozen residual model to statistically comparable performance, but that result is treated as a post-hoc diagnostic. The next major research milestones are self-supervised representation learning, uncertainty calibration, ONNX export, local latency benchmarking, and a Streamlit demo.
+For the original clean-channel benchmark, the selected system remains the GroupNorm CNN with a validation-selected frozen linear-head refit. For frequency-selective multipath, the selected maximum-robustness model uses a jointly trained residual signal front end, while a frozen-backbone variant provides parameter-efficient adaptation by training only 2,944 parameters. For zero-shot transfer to RadioML 2016.10A, the plain mixed-I/Q baseline is selected because it reaches 52.54% accuracy across all 20 SNR levels and 67.03% on the shared six-SNR grid without dataset-specific calibration. A validation-selected `×112` input scale restores the frozen residual model to statistically comparable performance, but that result is treated as a post-hoc diagnostic.
+
+The self-supervised label-efficiency milestone evaluates SimCLR, VICReg, and random initialization across five labeled-data fractions using an exact 1,320-update budget. SimCLR is selected as a clean-channel specialist with 1% labels, VICReg is selected as the balanced 5% label-efficient model and as the strongest robustness-oriented model with 10% labels, and random initialization remains the selected full-label model. The next major research milestones are uncertainty calibration, ONNX export, local latency benchmarking, and a Streamlit demo.
 
 ## Selected Supervised Baseline
 
@@ -165,6 +172,45 @@ The jointly trained residual model remains the selected system for maximum synth
 ![RadioML 2016.10A per-class accuracy](reports/figures/radioml2016_external_transfer_classes_v1.png)
 
 Detailed conversion methodology, matched short-window controls, amplitude analysis, paired-seed comparisons, limitations, and model-selection decisions are documented in [RadioML 2016.10A External Transfer Evaluation v1](reports/radioml2016_external_transfer_v1.md).
+
+## Self-Supervised Label Efficiency
+
+The label-efficiency study compares random initialization, SimCLR, and VICReg using the same compact GroupNorm CNN and paired class/SNR-stratified labeled subsets.
+
+Every downstream run uses an exact budget of `1,320` optimizer updates. The complete matrix contains:
+
+- Five labeled-data fractions: 1%, 5%, 10%, 25%, and 100%
+- Three initialization methods: random, SimCLR, and VICReg
+- Five paired downstream seeds: `2026` through `2030`
+- 75 supervised training runs
+- 300 held-out evaluations across clean, mild, moderate, and severe channel conditions
+
+### Selected SSL Systems
+
+| Intended use | Labels | Initialization | Validation | Clean | Mild | Moderate | Severe | Four-condition macro |
+|---|---:|---|---:|---:|---:|---:|---:|---:|
+| Clean low-label specialist | 1% | SimCLR | **76.66%** | **75.76%** | 68.10% | 51.39% | 34.80% | 57.51% |
+| Label-efficient compromise | 5% | VICReg | **93.04%** | **92.24%** | **83.43%** | **63.03%** | 38.39% | **69.27%** |
+| Robust low-label model | 10% | VICReg | **94.24%** | 93.64% | **84.50%** | **62.41%** | **37.51%** | **69.52%** |
+| Full-label model | 100% | Random initialization | **95.64%** | **95.29%** | **86.81%** | **65.26%** | **39.21%** | **71.64%** |
+
+The main conclusions are:
+
+- SimCLR gives the largest clean-channel improvement in the extreme 1% label regime: `+1.67` percentage points on clean held-out data.
+- The same 1% SimCLR model degrades moderate and severe multipath performance, so it is treated as a clean-channel specialist rather than a robust default.
+- VICReg at 5% labels provides the most balanced low-label compromise, improving the clean, mild, and moderate conditions and increasing the four-condition macro average on four of five paired seeds.
+- VICReg at 10% labels provides the strongest robustness-oriented SSL result: `+0.86`, `+1.73`, and `+0.69` percentage points on mild, moderate, and severe multipath, respectively, with only a `0.23`-point clean-data trade-off.
+- With all labels available, random initialization remains best. Neither SSL method provides a consistent full-label advantage.
+
+![SSL validation accuracy versus label fraction](reports/figures/ssl_label_efficiency_validation_v2.png)
+
+![SSL held-out accuracy across channel conditions](reports/figures/ssl_label_efficiency_held_out_v2.png)
+
+![Paired SSL accuracy change versus random initialization](reports/figures/ssl_label_efficiency_paired_changes_v2.png)
+
+![Selected pooled SSL confusion-matrix comparisons](reports/figures/ssl_label_efficiency_selected_confusions_v2.png)
+
+Detailed protocol, paired validation results, held-out channel evaluation, pooled confusion matrices, selected systems, limitations, and reproduction commands are documented in [SSL Label-Efficiency Evaluation v2](reports/ssl_label_efficiency_v2.md).
 
 ## Why the Frozen Head Refit Was Selected
 
@@ -562,6 +608,39 @@ python scripts\analyze_radioml2016_external_transfer.py `
   --config configs\compare_radioml2016_external_transfer_v1.yaml
 ```
 
+## Reproduce the SSL Label-Efficiency Study
+
+Prepare and validate the exact-budget 75-run matrix:
+
+```powershell
+python scripts\run_ssl_label_efficiency_seed_sweep.py `
+  --config configs\ssl_label_efficiency_seed_sweep_v2.yaml `
+  --dry-run
+```
+
+Execute or resume downstream training:
+
+```powershell
+python scripts\execute_ssl_label_efficiency_seed_sweep.py `
+  --manifest results\ssl_label_efficiency_seed_sweep_v2\dry_run_manifest.json `
+  --resume
+```
+
+Evaluate all 75 checkpoints on clean, mild, moderate, and severe held-out data:
+
+```powershell
+python scripts\evaluate_ssl_label_efficiency.py `
+  --config configs\evaluate_ssl_label_efficiency_v2.yaml `
+  --resume
+```
+
+Regenerate the selected-system summary and figures:
+
+```powershell
+python scripts\analyze_ssl_label_efficiency.py `
+  --config configs\analyze_ssl_label_efficiency_v2.yaml
+```
+
 ## Reproduce Historical Ablations
 
 ### Original BatchNorm five-seed study
@@ -605,7 +684,7 @@ Check whitespace and patch integrity:
 git diff --check
 ```
 
-At the current milestone, the repository contains **571 passing tests**.
+At the current milestone, the repository contains **620 passing tests**.
 
 ## Repository Structure
 
@@ -678,7 +757,8 @@ It does not include:
 - Residual front ends reduce, but do not eliminate, QPSK/8PSK confusion and PSK-to-16QAM collapse under severe multipath.
 - The learned front-end transformations are not established physical channel inverses.
 - Confidence calibration and uncertainty estimation are not yet implemented.
-- No self-supervised representation-learning result is available yet.
+- The SimCLR and VICReg downstream studies each reuse one fixed pretrained checkpoint, so SSL-pretraining variance is not yet measured.
+- The SSL study uses five paired downstream seeds and should be interpreted through paired changes and consistency counts rather than broad statistical claims.
 - Deployment benchmarking and ONNX export are not yet implemented.
 
 ## Roadmap
@@ -721,18 +801,23 @@ It does not include:
 - [x] Matched 128-sample synthetic control experiments
 - [x] Validation-only input-scale diagnostics
 - [x] Consolidated external-transfer analysis and report
+- [x] SimCLR and VICReg self-supervised pretraining
+- [x] Exact-budget SSL label-efficiency sweep at five label fractions
+- [x] Resumable 75-run downstream SSL training matrix
+- [x] 300-evaluation held-out SSL channel study
+- [x] Paired SSL-versus-random change analysis
+- [x] Selected pooled SSL confusion matrices
+- [x] SSL label-efficiency technical report
 
 ### Next
 
 - [ ] Low-SNR-aware training experiments
 - [ ] Confidence calibration
 - [ ] Uncertainty estimation
-- [ ] Self-supervised contrastive encoder
-- [ ] Self-supervised linear evaluation and fine-tuning
 - [ ] ONNX export
 - [ ] Local latency benchmark
 - [ ] Streamlit demo
-- [ ] Milestone README finalization and GitHub release
+- [ ] SSL milestone README finalization and GitHub release
 - [ ] Final project-wide technical report
 
 ## License
