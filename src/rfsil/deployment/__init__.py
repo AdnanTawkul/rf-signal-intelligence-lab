@@ -1,3 +1,11 @@
+from rfsil.deployment.benchmark import (
+    BenchmarkResult,
+    LatencySummary,
+    benchmark_checkpoint,
+    benchmark_environment,
+    build_benchmark_batch,
+    summarize_latencies,
+)
 from rfsil.deployment.inference import (
     BatchPrediction,
     IQInferenceEngine,
@@ -30,8 +38,10 @@ from rfsil.deployment.windowing import (
 
 __all__ = [
     "BatchPrediction",
+    "BenchmarkResult",
     "IQInferenceEngine",
     "IQStreamBuffer",
+    "LatencySummary",
     "LoadedIQ",
     "SignalPrediction",
     "StreamWindow",
@@ -40,11 +50,15 @@ __all__ = [
     "WindowPrediction",
     "WindowedIQ",
     "aggregate_window_predictions",
+    "benchmark_checkpoint",
+    "benchmark_environment",
+    "build_benchmark_batch",
     "build_prediction_document",
     "load_iq_file",
     "predict_window_batches",
     "rank_probabilities",
     "resolve_device",
+    "summarize_latencies",
     "validate_top_k",
     "window_iq_signal",
     "write_prediction_document",
