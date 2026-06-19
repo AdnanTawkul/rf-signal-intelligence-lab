@@ -1,0 +1,35 @@
+experiment_name: baseline_cnn_groupnorm_frozen_backbone_equalizer_screen_v1
+seed: 2026
+dataset:
+  train_path: data/processed/rf_modulation_multipath_mixed_train_v1/train.npz
+  validation_path: data/processed/rf_modulation_baseline_v1/validation.npz
+model:
+  model_type: residual_equalizer_iq_cnn
+  in_channels: 2
+  num_classes: 4
+  channels:
+  - 32
+  - 64
+  - 128
+  kernel_size: 7
+  dropout: 0.2
+  normalize_input_rms: false
+  normalization: group
+  group_norm_groups: 8
+  equalizer_hidden_channels: 16
+  equalizer_kernel_size: 9
+  equalizer_normalization: group
+  equalizer_group_norm_groups: 8
+training:
+  epochs: 30
+  batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  num_workers: 0
+  pin_memory: true
+output:
+  directory: results/baseline_cnn_groupnorm_frozen_backbone_equalizer_screen_v1
+  figure_path: reports/figures/baseline_cnn_groupnorm_frozen_backbone_equalizer_screen_v1_training.png
+initialization:
+  type: frozen_supervised_backbone
+  checkpoint_path: results/baseline_cnn_groupnorm_multipath_mixed_seed_sweep_v1/seed_2026/best_model.pt
