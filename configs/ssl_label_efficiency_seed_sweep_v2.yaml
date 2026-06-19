@@ -1,0 +1,52 @@
+experiment_name: ssl_label_efficiency_seed_sweep_v2
+experiment_prefix: baseline_cnn_groupnorm_ssl_label_efficiency_v2
+
+seeds:
+  - 2026
+  - 2027
+  - 2028
+  - 2029
+  - 2030
+
+label_fractions:
+  - identifier: labels_001pct
+    display_name: 1%
+    examples_per_class_snr: 2
+
+  - identifier: labels_005pct
+    display_name: 5%
+    examples_per_class_snr: 10
+
+  - identifier: labels_010pct
+    display_name: 10%
+    examples_per_class_snr: 20
+
+  - identifier: labels_025pct
+    display_name: 25%
+    examples_per_class_snr: 50
+
+  - identifier: labels_100pct
+    display_name: 100%
+    examples_per_class_snr: 200
+
+training_budget:
+  stratum_count: 28
+  batch_size: 128
+  target_optimizer_steps: 1320
+  drop_last: false
+  require_exact: true
+
+methods:
+  random:
+    template_config: configs/train_groupnorm_low_label_10_steps_matched_v1.yaml
+
+  simclr:
+    template_config: configs/train_groupnorm_simclr_low_label_10_steps_matched_v1.yaml
+
+  vicreg:
+    template_config: configs/train_groupnorm_vicreg_low_label_10_steps_matched_v1.yaml
+
+output:
+  directory: results/ssl_label_efficiency_seed_sweep_v2
+  figure_directory: reports/figures
+  manifest_name: dry_run_manifest.json

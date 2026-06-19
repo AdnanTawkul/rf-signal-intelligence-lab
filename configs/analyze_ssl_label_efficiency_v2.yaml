@@ -1,0 +1,83 @@
+experiment_name: ssl_label_efficiency_analysis_v2
+
+validation_aggregate: results/ssl_label_efficiency_seed_sweep_v2/aggregate_validation.json
+held_out_aggregate: results/ssl_label_efficiency_held_out_v2/aggregate_metrics.json
+held_out_metrics_root: results/ssl_label_efficiency_held_out_v2
+
+seeds:
+  - 2026
+  - 2027
+  - 2028
+  - 2029
+  - 2030
+
+fractions:
+  - identifier: labels_001pct
+    display_name: 1%
+    percentage: 1
+
+  - identifier: labels_005pct
+    display_name: 5%
+    percentage: 5
+
+  - identifier: labels_010pct
+    display_name: 10%
+    percentage: 10
+
+  - identifier: labels_025pct
+    display_name: 25%
+    percentage: 25
+
+  - identifier: labels_100pct
+    display_name: 100%
+    percentage: 100
+
+methods:
+  random: Random initialization
+  simclr: SimCLR
+  vicreg: VICReg
+
+conditions:
+  clean: Clean
+  mild: Mild multipath
+  moderate: Moderate multipath
+  severe: Severe multipath
+
+selections:
+  clean_low_label_model:
+    fraction: labels_001pct
+    method: simclr
+
+  label_efficient_compromise:
+    fraction: labels_005pct
+    method: vicreg
+
+  robust_low_label_model:
+    fraction: labels_010pct
+    method: vicreg
+
+  full_label_model:
+    fraction: labels_100pct
+    method: random
+
+confusion_comparisons:
+  - identifier: clean_1pct_simclr
+    display_name: 1% labels — clean
+    condition: clean
+    fraction: labels_001pct
+    reference_method: random
+    candidate_method: simclr
+
+  - identifier: moderate_10pct_vicreg
+    display_name: 10% labels — moderate multipath
+    condition: moderate
+    fraction: labels_010pct
+    reference_method: random
+    candidate_method: vicreg
+
+output:
+  summary_json: results/ssl_label_efficiency_analysis_v2/summary.json
+  validation_figure: reports/figures/ssl_label_efficiency_validation_v2.png
+  held_out_figure: reports/figures/ssl_label_efficiency_held_out_v2.png
+  paired_change_figure: reports/figures/ssl_label_efficiency_paired_changes_v2.png
+  confusion_figure: reports/figures/ssl_label_efficiency_selected_confusions_v2.png
