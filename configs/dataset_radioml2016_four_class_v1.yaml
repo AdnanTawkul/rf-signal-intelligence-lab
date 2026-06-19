@@ -1,0 +1,17 @@
+dataset_name: radioml2016_four_class_v1
+seed: 2026
+
+source:
+  dataset_name: RadioML 2016.10A
+  archive_path: data/raw/radioml_2016_10a/RML2016.10a.tar.bz2
+  pickle_path: data/raw/radioml_2016_10a/RML2016.10a_dict_optimized.pkl
+  download_url: https://zenodo.org/records/18397070/files/RML2016.10a.tar.bz2
+  expected_archive_md5: ffedb2c24e33b826d3d0df4aa8f32c1b
+  license: CC BY-NC-SA 4.0
+
+output_directory: data/processed/radioml2016_four_class_v1
+
+splits:
+  train: 700
+  validation: 150
+  test: 150
