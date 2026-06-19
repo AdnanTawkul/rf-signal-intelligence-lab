@@ -14,6 +14,12 @@ from rfsil.deployment.prediction import (
     validate_top_k,
     write_prediction_document,
 )
+from rfsil.deployment.streaming import (
+    IQStreamBuffer,
+    StreamingIQClassifier,
+    StreamingPrediction,
+    StreamWindow,
+)
 from rfsil.deployment.windowing import (
     SignalPrediction,
     WindowedIQ,
@@ -25,8 +31,12 @@ from rfsil.deployment.windowing import (
 __all__ = [
     "BatchPrediction",
     "IQInferenceEngine",
+    "IQStreamBuffer",
     "LoadedIQ",
     "SignalPrediction",
+    "StreamWindow",
+    "StreamingIQClassifier",
+    "StreamingPrediction",
     "WindowPrediction",
     "WindowedIQ",
     "aggregate_window_predictions",
