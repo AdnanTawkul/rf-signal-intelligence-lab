@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -148,6 +149,45 @@ def main() -> None:
         )
 
     evaluation_content = content["evaluation"]
+
+    if not isinstance(
+        evaluation_content,
+        dict,
+    ):
+        raise ValueError(
+            "evaluation must be a mapping."
+        )
+
+    raw_input_scale = (
+        evaluation_content.get(
+            "input_scale",
+            1.0,
+        )
+    )
+
+    if (
+        isinstance(raw_input_scale, bool)
+        or not isinstance(
+            raw_input_scale,
+            (int, float),
+        )
+    ):
+        raise ValueError(
+            "evaluation.input_scale must be "
+            "a positive finite number."
+        )
+
+    input_scale = float(raw_input_scale)
+
+    if (
+        not math.isfinite(input_scale)
+        or input_scale <= 0.0
+    ):
+        raise ValueError(
+            "evaluation.input_scale must be "
+            "a positive finite number."
+        )
+
     dataset = NPZIQDataset(test_path)
     loader = create_data_loader(
         dataset,
@@ -170,6 +210,7 @@ def main() -> None:
     print(f"Device: {device}")
     print(f"Test examples: {len(dataset)}")
     print(f"Seeds: {seeds}")
+    print(f"Input scale: {input_scale:g}")
 
     for seed in seeds:
         checkpoint_path = (
@@ -210,6 +251,7 @@ def main() -> None:
             model=model,
             data_loader=loader,
             device=device,
+            input_scale=input_scale,
         )
 
         if save_predictions:
@@ -252,6 +294,7 @@ def main() -> None:
     aggregate_content = {
         "format_version": 1,
         "experiment_name": experiment_name,
+        "input_scale": input_scale,
         "test_path": str(
             test_path.relative_to(PROJECT_ROOT)
         ),
