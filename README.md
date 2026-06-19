@@ -29,11 +29,18 @@ The project currently includes:
 - Held-out evaluation by class and SNR
 - Confusion-matrix and class-by-SNR error analysis
 - Five-seed training, refit, and test reproducibility studies
+- Frequency-selective tapped-delay-line multipath simulation
+- Reusable clean, mild, moderate, and severe channel profiles
+- Balanced mixed-multipath supervised training
+- Jointly trained learnable residual I/Q front end
+- Frozen-backbone residual adaptation with 2,944 trainable parameters
+- Paired five-seed evaluation across four channel conditions
+- Correction-magnitude and pooled-confusion analysis
 - RMS-normalization and GroupNorm ablations
 - Automated tests with `pytest`
 - Static analysis with Ruff
 
-The selected supervised system uses a GroupNorm CNN encoder followed by a validation-selected frozen linear-head refit. The next major research milestones are self-supervised representation learning, uncertainty calibration, public-dataset validation, ONNX export, local latency benchmarking, and a Streamlit demo.
+For the original clean-channel benchmark, the selected system remains the GroupNorm CNN with a validation-selected frozen linear-head refit. For frequency-selective multipath, the selected maximum-robustness model uses a jointly trained residual signal front end, while a frozen-backbone variant provides parameter-efficient adaptation by training only 2,944 parameters. The next major research milestones are self-supervised representation learning, uncertainty calibration, public-dataset validation, ONNX export, local latency benchmarking, and a Streamlit demo.
 
 ## Selected Supervised Baseline
 
@@ -90,6 +97,28 @@ Five independently trained GroupNorm checkpoints were refitted independently. Fo
 
 Detailed methodology, BatchNorm results, RMS-normalization ablation, GroupNorm comparison, class-by-SNR diagnosis, frozen-embedding experiments, and five-seed head-refit evidence are documented in [Baseline CNN v1 Results](reports/baseline_cnn_v1.md).
 
+## Selected Multipath-Robust Models
+
+The multipath benchmark uses a balanced training distribution containing 25% clean, 25% mild, 25% moderate, and 25% severe channel examples.
+
+| Model | Clean | Mild | Moderate | Severe |
+|---|---:|---:|---:|---:|
+| Mixed-I/Q baseline | 93.34% | 90.10% | 78.93% | 56.64% |
+| Joint residual front end | 93.23% | 91.69% | **84.97%** | **65.59%** |
+| Frozen-backbone residual front end | **94.21%** | **91.71%** | 84.67% | 63.84% |
+
+The jointly trained residual front end is the selected **maximum-robustness model**. Relative to the mixed-I/Q baseline, it improves moderate accuracy by 6.04 percentage points and severe accuracy by 8.94 percentage points.
+
+The frozen-backbone variant is the selected **parameter-efficient adaptation model**. It freezes the existing 73,092-parameter classifier and trains only a 2,944-parameter signal front end. It improves clean, mild, moderate, and severe accuracy on all five paired seeds.
+
+Both approaches substantially reduce the dominant QPSK/8PSK-to-16QAM failure pathway under frequency-selective multipath.
+
+![Mixed-IQ baseline versus jointly trained residual front end](reports/figures/residual_equalizer_comparison_v1.png)
+
+![Mixed-IQ baseline versus frozen-backbone residual front end](reports/figures/frozen_backbone_equalizer_comparison_v1.png)
+
+Detailed architecture, training protocols, correction analysis, paired-seed results, SNR analysis, and pooled confusion matrices are documented in [Learnable Residual Signal Front End v1](reports/learnable_residual_front_end_v1.md).
+
 ## Why the Frozen Head Refit Was Selected
 
 The earlier GroupNorm baseline achieved:
@@ -130,11 +159,12 @@ Each synthetic classification example follows this pipeline:
 3. Fixed-length waveform extraction
 4. Amplitude scaling
 5. Optional flat Rayleigh fading
-6. Carrier frequency offset
-7. Carrier phase offset
-8. Zero-padded integer timing shift
-9. AWGN at the configured SNR
-10. Conversion to a two-channel tensor
+6. Optional frequency-selective tapped-delay-line multipath
+7. Carrier frequency offset
+8. Carrier phase offset
+9. Zero-padded integer timing shift
+10. AWGN at the configured SNR
+11. Conversion to a two-channel tensor
 
 The model input format is:
 
@@ -146,11 +176,11 @@ The model input format is:
 - Channel 1: quadrature component
 - Default baseline sample length: 2,048 samples
 
-The generated dataset stores labels and impairment metadata, including SNR, frequency offset, phase offset, amplitude scale, timing shift, fading state, and generation seed.
+The generated dataset stores labels and impairment metadata, including SNR, frequency offset, phase offset, amplitude scale, timing shift, fading state, multipath condition, and generation seed.
 
-## Selected Model
+## Selected Clean-Channel Model
 
-The selected supervised system is a compact one-dimensional CNN encoder with GroupNorm and a validation-selected linear classifier head.
+The selected clean-channel system is a compact one-dimensional CNN encoder with GroupNorm and a validation-selected linear classifier head.
 
 ```text
 Input: [batch, 2, 2048]
@@ -380,6 +410,68 @@ python scripts\evaluate_baseline.py --config configs\evaluate_groupnorm_head_ref
 python scripts\analyze_baseline_errors.py --config configs\analyze_groupnorm_head_refit_v1.yaml
 ```
 
+## Reproduce the Multipath-Robust Models
+
+The following commands assume that the clean and multipath datasets referenced by the configurations are available under `data/processed/`.
+
+### Joint residual front end
+
+Train all five seeds:
+
+```powershell
+python scripts\run_baseline_seed_sweep.py --config configs\baseline_groupnorm_residual_equalizer_seed_sweep_v1.yaml
+```
+
+Evaluate clean, mild, moderate, and severe conditions:
+
+```powershell
+$configs = @(
+    "configs\evaluate_groupnorm_residual_equalizer_seed_sweep_v1.yaml",
+    "configs\evaluate_groupnorm_residual_equalizer_mild_seed_sweep_v1.yaml",
+    "configs\evaluate_groupnorm_residual_equalizer_moderate_seed_sweep_v1.yaml",
+    "configs\evaluate_groupnorm_residual_equalizer_severe_seed_sweep_v1.yaml"
+)
+
+foreach ($config in $configs) {
+    python scripts\evaluate_seed_sweep.py --config $config
+}
+```
+
+Generate the consolidated comparison:
+
+```powershell
+python scripts\compare_multipath_mitigation.py --config configs\compare_residual_equalizer_v1.yaml
+```
+
+### Frozen-backbone residual front end
+
+Train five paired front ends while loading and freezing the matching baseline checkpoint for each seed:
+
+```powershell
+python scripts\run_baseline_seed_sweep.py --config configs\baseline_groupnorm_frozen_backbone_equalizer_seed_sweep_v1.yaml
+```
+
+Evaluate all four channel conditions:
+
+```powershell
+$configs = @(
+    "configs\evaluate_groupnorm_frozen_backbone_equalizer_seed_sweep_v1.yaml",
+    "configs\evaluate_groupnorm_frozen_backbone_equalizer_mild_seed_sweep_v1.yaml",
+    "configs\evaluate_groupnorm_frozen_backbone_equalizer_moderate_seed_sweep_v1.yaml",
+    "configs\evaluate_groupnorm_frozen_backbone_equalizer_severe_seed_sweep_v1.yaml"
+)
+
+foreach ($config in $configs) {
+    python scripts\evaluate_seed_sweep.py --config $config
+}
+```
+
+Generate the consolidated frozen-backbone comparison:
+
+```powershell
+python scripts\compare_multipath_mitigation.py --config configs\compare_frozen_backbone_equalizer_v1.yaml
+```
+
 ## Reproduce Historical Ablations
 
 ### Original BatchNorm five-seed study
@@ -423,7 +515,7 @@ Check whitespace and patch integrity:
 git diff --check
 ```
 
-At the current milestone, the repository contains **265 passing tests**.
+At the current milestone, the repository contains **548 passing tests**.
 
 ## Repository Structure
 
@@ -492,8 +584,9 @@ It does not include:
 - Training and test data come from the same signal-generator family.
 - Real receiver effects and hardware-specific distortions are not yet represented fully.
 - Public RF datasets have not yet been integrated.
-- Low-SNR phase-modulation discrimination remains the dominant failure regime.
-- The frozen linear-head refit improves the overall QPSK/8PSK boundary, but severe-noise errors remain.
+- Low-SNR and severe-multipath PSK discrimination remain the dominant failure regimes.
+- Residual front ends reduce, but do not eliminate, QPSK/8PSK confusion and PSK-to-16QAM collapse under severe multipath.
+- The learned front-end transformations are not established physical channel inverses.
 - Confidence calibration and uncertainty estimation are not yet implemented.
 - No self-supervised representation-learning result is available yet.
 - Deployment benchmarking and ONNX export are not yet implemented.
@@ -524,6 +617,13 @@ It does not include:
 - [x] Frozen linear-head refit
 - [x] Native PyTorch classifier-head conversion
 - [x] Five-seed frozen-head reproducibility study
+- [x] Frequency-selective multipath channel profiles
+- [x] Balanced mixed-multipath supervised training
+- [x] Paired clean, mild, moderate, and severe evaluation
+- [x] Joint learnable residual signal front end
+- [x] Frozen-backbone parameter-efficient adaptation
+- [x] Five-seed residual-front-end robustness studies
+- [x] Correction-magnitude and pooled-confusion analysis
 - [x] Automated testing and Ruff checks
 
 ### Next

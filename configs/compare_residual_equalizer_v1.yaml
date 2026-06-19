@@ -1,0 +1,73 @@
+experiment_name: residual_equalizer_comparison_v1
+comparison_title: Mixed-IQ Baseline vs Residual Equalizer
+
+condition_order:
+  - clean
+  - mild
+  - moderate
+  - severe
+
+seeds:
+  - 2026
+  - 2027
+  - 2028
+  - 2029
+  - 2030
+
+class_names:
+  - BPSK
+  - QPSK
+  - 8PSK
+  - 16QAM
+
+target_class: 16QAM
+
+models:
+  original:
+    display_name: Mixed-IQ baseline
+    conditions:
+      clean:
+        aggregate_metrics: results/baseline_cnn_groupnorm_multipath_mixed_seed_sweep_v1_test/aggregate_metrics.json
+        predictions_directory: results/baseline_cnn_groupnorm_multipath_mixed_seed_sweep_v1_test/predictions
+      mild:
+        aggregate_metrics: results/baseline_cnn_groupnorm_multipath_mixed_mild_seed_sweep_v1_test/aggregate_metrics.json
+        predictions_directory: results/baseline_cnn_groupnorm_multipath_mixed_mild_seed_sweep_v1_test/predictions
+      moderate:
+        aggregate_metrics: results/baseline_cnn_groupnorm_multipath_mixed_moderate_seed_sweep_v1_test/aggregate_metrics.json
+        predictions_directory: results/baseline_cnn_groupnorm_multipath_mixed_moderate_seed_sweep_v1_test/predictions
+      severe:
+        aggregate_metrics: results/baseline_cnn_groupnorm_multipath_mixed_severe_seed_sweep_v1_test/aggregate_metrics.json
+        predictions_directory: results/baseline_cnn_groupnorm_multipath_mixed_severe_seed_sweep_v1_test/predictions
+
+  mitigated:
+    display_name: Residual equalizer
+    conditions:
+      clean:
+        aggregate_metrics: results/baseline_cnn_groupnorm_residual_equalizer_seed_sweep_v1_test/aggregate_metrics.json
+        predictions_directory: results/baseline_cnn_groupnorm_residual_equalizer_seed_sweep_v1_test/predictions
+      mild:
+        aggregate_metrics: results/baseline_cnn_groupnorm_residual_equalizer_mild_seed_sweep_v1_test/aggregate_metrics.json
+        predictions_directory: results/baseline_cnn_groupnorm_residual_equalizer_mild_seed_sweep_v1_test/predictions
+      moderate:
+        aggregate_metrics: results/baseline_cnn_groupnorm_residual_equalizer_moderate_seed_sweep_v1_test/aggregate_metrics.json
+        predictions_directory: results/baseline_cnn_groupnorm_residual_equalizer_moderate_seed_sweep_v1_test/predictions
+      severe:
+        aggregate_metrics: results/baseline_cnn_groupnorm_residual_equalizer_severe_seed_sweep_v1_test/aggregate_metrics.json
+        predictions_directory: results/baseline_cnn_groupnorm_residual_equalizer_severe_seed_sweep_v1_test/predictions
+
+correction_analysis:
+  checkpoint_directory: results/baseline_cnn_groupnorm_residual_equalizer_seed_sweep_v1
+  device: auto
+  batch_size: 128
+  num_workers: 0
+  pin_memory: true
+  datasets:
+    clean: data/processed/rf_modulation_baseline_v1/test.npz
+    mild: data/processed/rf_modulation_multipath_mild_v1/test.npz
+    moderate: data/processed/rf_modulation_multipath_moderate_v1/test.npz
+    severe: data/processed/rf_modulation_multipath_severe_v1/test.npz
+
+output:
+  summary_json: results/residual_equalizer_comparison_v1/summary.json
+  overview_figure_path: reports/figures/residual_equalizer_comparison_v1.png
+  confusion_figure_path: reports/figures/residual_equalizer_confusions_v1.png

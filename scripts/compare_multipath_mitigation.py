@@ -7,8 +7,11 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 import yaml
+from torch.utils.data import DataLoader
 
+from rfsil.data.torch_dataset import NPZIQDataset
 from rfsil.evaluation.channel_robustness import (
     SeedSweepMetrics,
     load_seed_sweep_metrics,
@@ -17,8 +20,18 @@ from rfsil.evaluation.confusion_robustness import (
     ConditionConfusionSummary,
     load_condition_confusions,
 )
+from rfsil.evaluation.equalizer_correction_analysis import (
+    CorrectionStatisticsAccumulator,
+    aggregate_seed_correction_statistics,
+)
 from rfsil.evaluation.mitigation_comparison import (
     compare_model_families,
+)
+from rfsil.models.model_factory import (
+    create_model_from_checkpoint,
+)
+from rfsil.models.residual_equalizer_cnn import (
+    ResidualEqualizerIQCNN,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -117,11 +130,195 @@ def load_model_results(
     return metrics, confusions
 
 
+def resolve_device(
+    value: object,
+) -> torch.device:
+    """Resolve an analysis device."""
+    device_name = str(value).strip().lower()
+
+    if device_name == "auto":
+        return torch.device(
+            "cuda"
+            if torch.cuda.is_available()
+            else "cpu"
+        )
+
+    device = torch.device(device_name)
+
+    if (
+        device.type == "cuda"
+        and not torch.cuda.is_available()
+    ):
+        raise RuntimeError(
+            "CUDA was requested but is unavailable."
+        )
+
+    return device
+
+
+def analyze_equalizer_corrections(
+    *,
+    content: dict[str, Any],
+    conditions: tuple[str, ...],
+    seeds: tuple[int, ...],
+) -> dict[str, Any]:
+    """Measure learned IQ corrections by condition and seed."""
+    checkpoint_directory = resolve_path(
+        content["checkpoint_directory"]
+    )
+    datasets = content["datasets"]
+
+    if not isinstance(datasets, dict):
+        raise ValueError(
+            "correction_analysis.datasets "
+            "must be a mapping."
+        )
+
+    device = resolve_device(
+        content.get("device", "auto")
+    )
+    batch_size = int(
+        content.get("batch_size", 128)
+    )
+    num_workers = int(
+        content.get("num_workers", 0)
+    )
+    pin_memory = bool(
+        content.get("pin_memory", True)
+    )
+
+    if batch_size <= 0:
+        raise ValueError(
+            "correction-analysis batch_size "
+            "must be positive."
+        )
+
+    if num_workers < 0:
+        raise ValueError(
+            "correction-analysis num_workers "
+            "must not be negative."
+        )
+
+    condition_results: dict[str, Any] = {}
+
+    for condition in conditions:
+        if condition not in datasets:
+            raise ValueError(
+                "Correction analysis is missing "
+                f"dataset {condition!r}."
+            )
+
+        dataset = NPZIQDataset(
+            resolve_path(datasets[condition])
+        )
+        loader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=(
+                pin_memory
+                and device.type == "cuda"
+            ),
+        )
+
+        per_seed: dict[
+            int,
+            dict[str, int | float],
+        ] = {}
+
+        for seed in seeds:
+            checkpoint_path = (
+                checkpoint_directory
+                / f"seed_{seed}"
+                / "best_model.pt"
+            )
+
+            if not checkpoint_path.is_file():
+                raise FileNotFoundError(
+                    checkpoint_path
+                )
+
+            checkpoint = torch.load(
+                checkpoint_path,
+                map_location="cpu",
+                weights_only=True,
+            )
+
+            model, _ = (
+                create_model_from_checkpoint(
+                    checkpoint
+                )
+            )
+
+            if not isinstance(
+                model,
+                ResidualEqualizerIQCNN,
+            ):
+                raise TypeError(
+                    "Correction analysis requires "
+                    "ResidualEqualizerIQCNN "
+                    "checkpoints."
+                )
+
+            model.load_state_dict(
+                checkpoint["model_state_dict"]
+            )
+            model.to(device)
+            model.eval()
+
+            accumulator = (
+                CorrectionStatisticsAccumulator()
+            )
+
+            with torch.inference_mode():
+                for batch in loader:
+                    inputs = batch["iq"].to(
+                        device,
+                        non_blocking=(
+                            device.type == "cuda"
+                        ),
+                    )
+                    corrections = (
+                        model.equalizer
+                        .predict_correction(inputs)
+                    )
+
+                    accumulator.update(
+                        inputs,
+                        corrections,
+                    )
+
+            per_seed[seed] = (
+                accumulator.finalize()
+            )
+
+        condition_results[condition] = (
+            aggregate_seed_correction_statistics(
+                per_seed
+            )
+        )
+
+        print(
+            "Analyzed equalizer corrections:",
+            condition,
+        )
+
+    return {
+        "device": str(device),
+        "checkpoint_directory": str(
+            content["checkpoint_directory"]
+        ),
+        "conditions": condition_results,
+    }
+
+
 def create_overview_figure(
     summary: dict[str, Any],
     output_path: Path,
     original_name: str,
     mitigated_name: str,
+    comparison_title: str,
 ) -> None:
     """Plot overall and class-specific mitigation effects."""
     conditions = summary["condition_order"]
@@ -330,9 +527,7 @@ def create_overview_figure(
     axes[1, 1].grid(alpha=0.3)
     axes[1, 1].legend()
 
-    figure.suptitle(
-        "Mixed-Multipath Training Mitigation"
-    )
+    figure.suptitle(comparison_title)
     figure.tight_layout()
 
     output_path.parent.mkdir(
@@ -351,6 +546,7 @@ def create_confusion_figure(
     output_path: Path,
     original_name: str,
     mitigated_name: str,
+    comparison_title: str,
 ) -> None:
     """Compare moderate and severe pooled confusion matrices."""
     class_names = summary["class_names"]
@@ -449,7 +645,7 @@ def create_confusion_figure(
         label="Row-normalized frequency",
     )
     figure.suptitle(
-        "Multipath Mitigation: "
+        f"{comparison_title}: "
         "Pooled Five-Seed Confusion Matrices"
     )
 
@@ -533,6 +729,38 @@ def main() -> None:
         configuration["experiment_name"]
     )
 
+    comparison_title = str(
+        configuration.get(
+            "comparison_title",
+            configuration["experiment_name"],
+        )
+    )
+    summary["comparison_title"] = (
+        comparison_title
+    )
+
+    correction_content = configuration.get(
+        "correction_analysis"
+    )
+
+    if correction_content is not None:
+        if not isinstance(
+            correction_content,
+            dict,
+        ):
+            raise ValueError(
+                "correction_analysis must be "
+                "a mapping."
+            )
+
+        summary["correction_analysis"] = (
+            analyze_equalizer_corrections(
+                content=correction_content,
+                conditions=conditions,
+                seeds=seeds,
+            )
+        )
+
     output_content = configuration["output"]
     summary_path = resolve_path(
         output_content["summary_json"]
@@ -572,15 +800,17 @@ def main() -> None:
         overview_path,
         original_name,
         mitigated_name,
+        comparison_title,
     )
     create_confusion_figure(
         summary,
         confusion_path,
         original_name,
         mitigated_name,
+        comparison_title,
     )
 
-    print("Multipath mitigation comparison")
+    print(comparison_title)
     print("")
 
     for condition in conditions:
@@ -633,6 +863,42 @@ def main() -> None:
                 f"{values[
                     'absolute_reduction'
                 ]:+.4f}"
+            )
+
+    correction_analysis = summary.get(
+        "correction_analysis"
+    )
+
+    if correction_analysis is not None:
+        print("")
+        print("Equalizer correction statistics")
+
+        for condition in conditions:
+            aggregate = correction_analysis[
+                "conditions"
+            ][condition]["aggregate"]
+
+            mean_absolute = aggregate[
+                "mean_absolute_correction"
+            ]
+            relative_rms = aggregate[
+                "relative_correction_rms"
+            ]
+
+            print(
+                f"{condition:8s} | "
+                f"mean abs="
+                f"{mean_absolute['mean']:.4f} "
+                f"+/- "
+                f"{mean_absolute[
+                    'standard_deviation'
+                ]:.4f} | "
+                f"relative RMS="
+                f"{relative_rms['mean']:.4f} "
+                f"+/- "
+                f"{relative_rms[
+                    'standard_deviation'
+                ]:.4f}"
             )
 
     print("")
