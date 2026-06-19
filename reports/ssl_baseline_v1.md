@@ -85,9 +85,11 @@ The low-label subset is selected jointly by modulation class and SNR:
 - 280 labeled training examples
 - Full 1,400-example validation split
 
-With batch size 256, the 280-example subset produces two optimizer updates per epoch. The low-label runs therefore use 330 epochs, approximately matching the 660-update budget of the 30-epoch full-data baseline.
+The historical low-label configurations use batch size `128` with `drop_last=False`. The 280-example subset therefore produces three optimizer updates per epoch, and 330 epochs produce 990 updates. The 5,600-example full-data baseline produces 44 updates per epoch and 1,320 updates over 30 epochs. Consequently, the historical `steps_matched` experiment names are retained for reproducibility, but the runs are not exactly step-matched to the full-data baseline. They should be interpreted as paired comparisons under an identical 990-update low-label budget.
 
 For every paired seed, random, SimCLR, and VICReg use the same training seed and subset-selection seed.
+
+The same fixed SimCLR and VICReg pretrained checkpoints are reused across all five downstream seeds. The reported variation therefore measures labeled-subset and supervised-training variation, but does not include SSL-pretraining variation.
 
 ## Five-seed paired low-label results
 
@@ -135,7 +137,7 @@ The SSL branch adds reusable infrastructure for:
 - Safe encoder-only checkpoint initialization
 - Fresh supervised classifier initialization
 - Deterministic class-SNR stratified subsets
-- Optimizer-step-matched low-label comparisons
+- Paired low-label comparisons under a shared 990-update budget
 - Paired five-seed evaluation
 - Reproducible checkpoints, summaries, histories, and figures
 
