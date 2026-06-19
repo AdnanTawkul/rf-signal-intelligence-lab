@@ -10,15 +10,21 @@ from rfsil.models.late_fusion_cnn import (
     LateFusionCNNConfig,
     LateFusionIQDPhaseCNN,
 )
+from rfsil.models.residual_equalizer_cnn import (
+    ResidualEqualizerCNNConfig,
+    ResidualEqualizerIQCNN,
+)
 
 type ModelConfiguration = (
     BaselineCNNConfig
     | LateFusionCNNConfig
+    | ResidualEqualizerCNNConfig
 )
 
 type ClassifierModel = (
     BaselineIQCNN
     | LateFusionIQDPhaseCNN
+    | ResidualEqualizerIQCNN
 )
 
 
@@ -79,6 +85,21 @@ def create_model_from_mapping(
 
         return (
             LateFusionIQDPhaseCNN(
+                configuration
+            ),
+            configuration,
+        )
+
+    if model_type == (
+        "residual_equalizer_iq_cnn"
+    ):
+        configuration = (
+            ResidualEqualizerCNNConfig
+            .from_mapping(content)
+        )
+
+        return (
+            ResidualEqualizerIQCNN(
                 configuration
             ),
             configuration,
