@@ -6,7 +6,9 @@ from pathlib import Path
 import pytest
 
 from rfsil.evaluation.ssl_label_efficiency import (
-    TestCondition,
+    TestCondition as HeldOutCondition,
+)
+from rfsil.evaluation.ssl_label_efficiency import (
     build_metrics_path,
     load_completed_test_evaluation,
     validate_checkpoint_metadata,
@@ -49,11 +51,11 @@ def make_expectation(
 
 def make_condition(
     tmp_path: Path,
-) -> TestCondition:
+) -> HeldOutCondition:
     test_path = tmp_path / "test.npz"
     test_path.write_bytes(b"dataset")
 
-    return TestCondition(
+    return HeldOutCondition(
         identifier="clean",
         display_name="Clean",
         test_path=test_path,
