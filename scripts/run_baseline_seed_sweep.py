@@ -16,6 +16,9 @@ from rfsil.evaluation.seed_variance import (
     SeedRunResult,
     aggregate_seed_results,
 )
+from rfsil.training.seed_sweep_config import (
+    prepare_seed_training_config,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -89,6 +92,9 @@ def main() -> None:
     base_training_config = resolve_project_path(
         content["base_training_config"]
     )
+    base_training_content = load_yaml(
+        base_training_config
+    )
     seeds = [int(seed) for seed in content["seeds"]]
 
     if not seeds:
@@ -125,17 +131,33 @@ def main() -> None:
             / f"{experiment_name}_seed_{seed}_training.png"
         )
 
+        generated_config_path = (
+            output_directory
+            / "generated_configs"
+            / f"seed_{seed}.yaml"
+        )
+
+        prepare_seed_training_config(
+            base_content=base_training_content,
+            seed=seed,
+            output_path=generated_config_path,
+        )
+
         print("")
         print(
             f"Starting run {run_index}/{len(seeds)} "
             f"with seed {seed}"
+        )
+        print(
+            "Resolved training config: "
+            f"{generated_config_path}"
         )
 
         command = [
             sys.executable,
             str(PROJECT_ROOT / "scripts" / "train_baseline.py"),
             "--config",
-            str(base_training_config),
+            str(generated_config_path),
             "--seed",
             str(seed),
             "--experiment-name",
@@ -178,6 +200,12 @@ def main() -> None:
         "experiment_name": experiment_name,
         "base_training_config": str(
             base_training_config.relative_to(PROJECT_ROOT)
+        ),
+        "generated_config_directory": str(
+            (
+                output_directory
+                / "generated_configs"
+            ).relative_to(PROJECT_ROOT)
         ),
         "seeds": seeds,
         "runs": [
