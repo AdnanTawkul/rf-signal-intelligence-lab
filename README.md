@@ -2,7 +2,7 @@
 
 A local, reproducible AI engineering project for RF modulation recognition from synthetic and public raw IQ datasets.
 
-The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, representation analysis, classifier-head refitting, deployment, long-signal inference, streaming inference, and reproducible latency benchmarking. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
+The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, representation analysis, classifier-head refitting, confidence calibration under channel shift, deployment, long-signal inference, streaming inference, and reproducible latency benchmarking. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
 
 ## Current Status
 
@@ -47,6 +47,12 @@ The project currently includes:
 - Resumable 75-run downstream training and 300-evaluation held-out test matrix
 - Paired SSL-versus-random analysis across clean, mild, moderate, and severe conditions
 - Pooled confusion-matrix analysis for selected SSL systems
+- Versioned calibration artifacts containing labels, predictions, logits, probabilities, SNR values, and class names
+- Negative log-likelihood, Brier score, expected calibration error, maximum calibration error, and reliability-bin analysis
+- Validation-fitted scalar temperature scaling for all 75 SSL downstream checkpoints
+- Frozen-temperature transfer evaluation across 300 clean and multipath held-out cases
+- Selective-accuracy analysis at multiple retained-coverage levels
+- Publication-ready calibration-transfer heatmaps, temperature plots, and reliability diagrams
 - Strict checkpoint-backed deployment inference
 - `.npy` and `.npz` IQ loading with complex and two-channel real input support
 - Fixed-window batch prediction with confidence and top-k JSON output
@@ -56,14 +62,16 @@ The project currently includes:
 - Timestamped online predictions
 - Fresh-process CPU and CUDA latency benchmarks
 - Throughput and CUDA-memory scaling analysis
-- Automated tests with `pytest`
+- 840 automated tests with `pytest`
 - Static analysis with Ruff
 
 For the original clean-channel benchmark, the selected system remains the GroupNorm CNN with a validation-selected frozen linear-head refit. For frequency-selective multipath, the selected maximum-robustness model uses a jointly trained residual signal front end, while a frozen-backbone variant provides parameter-efficient adaptation by training only 2,944 parameters. For zero-shot transfer to RadioML 2016.10A, the plain mixed-I/Q baseline is selected because it reaches 52.54% accuracy across all 20 SNR levels and 67.03% on the shared six-SNR grid without dataset-specific calibration. A validation-selected `×112` input scale restores the frozen residual model to statistically comparable performance, but that result is treated as a post-hoc diagnostic.
 
 The self-supervised label-efficiency milestone evaluates SimCLR, VICReg, and random initialization across five labeled-data fractions using an exact 1,320-update budget. SimCLR is selected as a clean-channel specialist with 1% labels, VICReg is selected as the balanced 5% label-efficient model and as the strongest robustness-oriented model with 10% labels, and random initialization remains the selected full-label model.
 
-The deployment milestone provides a complete path from trained checkpoint to fixed-window, long-signal, and streaming IQ inference. CPU batch-one steady-state latency is 1.32 ms. CUDA reaches 54,501.9 windows per second at batch size 128, a 26.82× throughput improvement over CPU at the same batch size, while using 107.4 MiB of peak PyTorch-allocated GPU memory. The next major research milestones are confidence calibration, uncertainty estimation, ONNX export, optimized inference, and an interactive demo.
+The deployment milestone provides a complete path from trained checkpoint to fixed-window, long-signal, and streaming IQ inference. CPU batch-one steady-state latency is 1.32 ms. CUDA reaches 54,501.9 windows per second at batch size 128, a 26.82× throughput improvement over CPU at the same batch size, while using 107.4 MiB of peak PyTorch-allocated GPU memory.
+
+The confidence-calibration milestone fits one scalar temperature per checkpoint on clean validation logits and transfers the frozen temperatures to 300 held-out clean and multipath evaluations. Calibration improves clean NLL and ECE in 71 of 75 models, but usually worsens confidence quality under multipath. The next major research milestones are uncertainty estimation, ONNX export, optimized inference, and an interactive demo.
 
 ## Selected Supervised Baseline
 
@@ -222,6 +230,54 @@ The main conclusions are:
 ![Selected pooled SSL confusion-matrix comparisons](reports/figures/ssl_label_efficiency_selected_confusions_v2.png)
 
 Detailed protocol, paired validation results, held-out channel evaluation, pooled confusion matrices, selected systems, limitations, and reproduction commands are documented in [SSL Label-Efficiency Evaluation v2](reports/ssl_label_efficiency_v2.md).
+
+## Confidence Calibration Under Channel Shift
+
+The calibration milestone tests whether one scalar temperature fitted on the clean validation split remains reliable when the channel changes at inference time.
+
+The completed matrix contains:
+
+- 75 validation-fitted temperatures
+- 75 validation calibration artifacts
+- 300 held-out calibration artifacts
+- Five labeled-data fractions
+- Random, SimCLR, and VICReg initialization
+- Five paired seeds
+- Clean, mild, moderate, and severe held-out channel conditions
+- NLL, ECE, MCE, Brier score, reliability-bin, and selective-accuracy analysis
+
+Temperature scaling preserves argmax predictions, so classification accuracy remains unchanged in all 300 held-out evaluations.
+
+### Average Transfer by Held-Out Condition
+
+| Condition | Mean NLL change | Mean ECE change | Mean Brier change | NLL improved | ECE improved |
+|---|---:|---:|---:|---:|---:|
+| Clean | **-0.03001** | **-0.03100** | **-0.00837** | **71/75** | **71/75** |
+| Mild multipath | +0.16737 | +0.00916 | +0.00056 | 16/75 | 16/75 |
+| Moderate multipath | +0.92714 | +0.02241 | +0.01541 | 16/75 | 16/75 |
+| Severe multipath | +2.31736 | +0.01144 | +0.01760 | 16/75 | 16/75 |
+
+Negative changes are improvements for NLL, ECE, and Brier score.
+
+The central result is:
+
+> **Validation-fitted scalar temperature scaling improves in-distribution calibration but does not transfer reliably to multipath channel shift.**
+
+The 1% label regime is the main exception. It improves NLL and ECE in 56 of 60 evaluations because these low-label models generally benefit from softened probabilities. From 5% labels upward, clean validation often selects temperatures below 1.0, sharpening predictions and amplifying overconfidence under multipath.
+
+Selective-accuracy changes remain very small and slightly negative on average. Scalar temperature scaling changes probability magnitudes but does not create a meaningfully better ranking for confidence-based rejection.
+
+![Held-out NLL change after validation-fitted calibration](reports/figures/ssl_calibration_nll_transfer_v1.png)
+
+![Held-out ECE change after validation-fitted calibration](reports/figures/ssl_calibration_ece_transfer_v1.png)
+
+![Validation-fitted temperatures](reports/figures/ssl_calibration_temperatures_v1.png)
+
+![Selective accuracy after temperature scaling](reports/figures/ssl_calibration_selective_accuracy_v1.png)
+
+![Representative reliability diagrams](reports/figures/ssl_calibration_reliability_examples_v1.png)
+
+Complete methodology, artifact integrity checks, transfer results, reliability analysis, limitations, and deployment recommendations are documented in [SSL Confidence Calibration Under Channel Shift v1](reports/ssl_confidence_calibration_v1.md).
 
 ## Deployment and IQ Inference
 
@@ -704,6 +760,36 @@ python scripts\analyze_ssl_label_efficiency.py `
   --config configs\analyze_ssl_label_efficiency_v2.yaml
 ```
 
+## Reproduce the Confidence-Calibration Study
+
+Export validation logits and fit one scalar temperature per checkpoint:
+
+```powershell
+python scripts\fit_ssl_validation_temperatures.py `
+  --config configs\fit_ssl_validation_temperatures_v1.yaml
+```
+
+Backfill calibration-ready held-out prediction artifacts:
+
+```powershell
+python scripts\backfill_ssl_calibration_predictions.py `
+  --config configs\backfill_ssl_calibration_predictions_v1.yaml
+```
+
+Apply the frozen validation temperatures to all held-out conditions and aggregate the metrics:
+
+```powershell
+python scripts\analyze_ssl_calibration.py `
+  --config configs\analyze_ssl_calibration_v1.yaml
+```
+
+Regenerate the calibration figures and compact visualization summary:
+
+```powershell
+python scripts\visualize_ssl_calibration.py `
+  --config configs\visualize_ssl_calibration_v1.yaml
+```
+
 ## Run Deployment Inference
 
 The following examples use a compatible trained checkpoint. Replace the checkpoint and input paths as required.
@@ -818,7 +904,7 @@ Check whitespace and patch integrity:
 git diff --check
 ```
 
-At the current milestone, the repository contains **723 passing tests**.
+At the current milestone, the repository contains **840 passing tests**.
 
 ## Repository Structure
 
@@ -890,7 +976,10 @@ It does not include:
 - Low-SNR and severe-multipath PSK discrimination remain the dominant failure regimes.
 - Residual front ends reduce, but do not eliminate, QPSK/8PSK confusion and PSK-to-16QAM collapse under severe multipath.
 - The learned front-end transformations are not established physical channel inverses.
-- Confidence calibration and uncertainty estimation are not yet implemented.
+- Scalar temperature scaling is implemented, but clean-validation calibration does not transfer reliably to multipath channel shift.
+- The same validation split is used for checkpoint selection and temperature fitting; a separate calibration split would provide a cleaner statistical protocol.
+- ECE and MCE depend on binning and can be unstable in sparsely populated bins; NLL and Brier score are treated as the primary proper scoring rules.
+- Uncertainty estimation beyond scalar confidence calibration is not yet implemented.
 - The SimCLR and VICReg downstream studies each reuse one fixed pretrained checkpoint, so SSL-pretraining variance is not yet measured.
 - The SSL study uses five paired downstream seeds and should be interpreted through paired changes and consistency counts rather than broad statistical claims.
 - Deployment benchmarking is complete on one local workstation, but the results are hardware-, driver-, operating-system-, and checkpoint-specific.
@@ -957,11 +1046,17 @@ It does not include:
 - [x] Deployment benchmark figures
 - [x] Deployment and IQ inference technical report
 - [x] Deployment milestone README finalization
+- [x] Calibration-ready logit and probability artifacts
+- [x] Validation-fitted scalar temperature scaling
+- [x] 300-evaluation held-out calibration transfer study
+- [x] Reliability diagrams and selective-accuracy analysis
+- [x] Confidence-calibration technical report
 
 ### Next
 
 - [ ] Low-SNR-aware training experiments
-- [ ] Confidence calibration
+- [ ] Channel-aware calibration
+- [ ] Distribution-shift detection
 - [ ] Uncertainty estimation
 - [ ] ONNX export
 - [ ] Mixed-precision inference

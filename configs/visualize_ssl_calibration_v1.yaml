@@ -1,0 +1,56 @@
+input:
+  aggregate_metrics: results/ssl_calibration_analysis_v1/aggregate_metrics.json
+
+layout:
+  fractions:
+    - identifier: labels_001pct
+      display_name: 1%
+      percentage: 1
+    - identifier: labels_005pct
+      display_name: 5%
+      percentage: 5
+    - identifier: labels_010pct
+      display_name: 10%
+      percentage: 10
+    - identifier: labels_025pct
+      display_name: 25%
+      percentage: 25
+    - identifier: labels_100pct
+      display_name: 100%
+      percentage: 100
+
+  methods:
+    random: Random
+    simclr: SimCLR
+    vicreg: VICReg
+
+  conditions:
+    clean: Clean
+    mild: Mild multipath
+    moderate: Moderate multipath
+    severe: Severe multipath
+
+  selective_coverages:
+    - 0.5
+    - 0.8
+    - 0.9
+    - 0.95
+
+representative:
+  fraction_identifier: labels_100pct
+  method: random
+  seed: 2026
+  conditions:
+    - clean
+    - severe
+
+output:
+  figure_directory: reports/figures
+  summary_json: results/ssl_calibration_analysis_v1/visualization_summary.json
+
+  figures:
+    nll_transfer: ssl_calibration_nll_transfer_v1.png
+    ece_transfer: ssl_calibration_ece_transfer_v1.png
+    temperatures: ssl_calibration_temperatures_v1.png
+    selective_accuracy: ssl_calibration_selective_accuracy_v1.png
+    reliability_examples: ssl_calibration_reliability_examples_v1.png
