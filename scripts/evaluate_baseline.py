@@ -15,11 +15,17 @@ from rfsil.data.torch_dataset import (
     NPZIQDataset,
     create_data_loader,
 )
+from rfsil.evaluation.calibration_artifacts import (
+    save_calibration_artifact,
+)
 from rfsil.evaluation.classification import (
-    collect_predictions,
+    PredictionResults,
+    collect_calibration_predictions,
     evaluate_predictions,
 )
-from rfsil.evaluation.prediction_artifacts import save_prediction_results
+from rfsil.evaluation.prediction_artifacts import (
+    save_prediction_results,
+)
 from rfsil.models.model_factory import (
     create_model_from_mapping,
 )
@@ -186,17 +192,44 @@ def main() -> None:
         ),
     )
 
-    prediction_results = collect_predictions(
-        model=model,
-        data_loader=loader,
-        device=device,
+    calibration_predictions = (
+        collect_calibration_predictions(
+            model=model,
+            data_loader=loader,
+            device=device,
+            class_names=tuple(class_names),
+        )
+    )
+
+    if calibration_predictions.snr_db is None:
+        raise RuntimeError(
+            "Evaluation predictions do not "
+            "contain SNR values."
+        )
+
+    prediction_results = PredictionResults(
+        labels=calibration_predictions.labels,
+        predictions=(
+            calibration_predictions.predictions
+        ),
+        snr_db=(
+            calibration_predictions.snr_db
+            .astype(
+                np.float32,
+                copy=False,
+            )
+        ),
     )
 
     evaluation = evaluate_predictions(
         labels=prediction_results.labels,
-        predictions=prediction_results.predictions,
+        predictions=(
+            prediction_results.predictions
+        ),
         snr_db=prediction_results.snr_db,
-        num_classes=model_configuration.num_classes,
+        num_classes=(
+            model_configuration.num_classes
+        ),
     )
 
     output_content = content["output"]
@@ -227,6 +260,10 @@ def main() -> None:
 
     metrics_path = output_directory / "metrics.json"
     predictions_path = output_directory / "predictions.npz"
+    calibration_predictions_path = (
+        output_directory
+        / "calibration_predictions.npz"
+    )
 
     metrics = {
         "format_version": 1,
@@ -273,6 +310,10 @@ def main() -> None:
         predictions_path,
         prediction_results,
     )
+    save_calibration_artifact(
+        calibration_predictions_path,
+        calibration_predictions,
+    )
 
     print(f"Device: {device}")
     print(f"Test examples: {evaluation.example_count}")
@@ -300,6 +341,10 @@ def main() -> None:
 
     print(f"Metrics: {metrics_path}")
     print(f"Predictions: {predictions_path}")
+    print(
+        "Calibration predictions: "
+        f"{calibration_predictions_path}"
+    )
     print(f"Confusion matrix: {confusion_path}")
     print(f"Accuracy by SNR: {accuracy_by_snr_path}")
 

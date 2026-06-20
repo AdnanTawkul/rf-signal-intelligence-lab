@@ -14,8 +14,12 @@ from rfsil.data.torch_dataset import (
     NPZIQDataset,
     create_data_loader,
 )
+from rfsil.evaluation.calibration_artifacts import (
+    save_calibration_artifact,
+)
 from rfsil.evaluation.classification import (
-    collect_predictions,
+    PredictionResults,
+    collect_calibration_predictions,
     evaluate_predictions,
 )
 from rfsil.evaluation.prediction_artifacts import (
@@ -338,6 +342,12 @@ def main() -> None:
             False,
         )
     )
+    save_calibration_predictions = bool(
+        evaluation_content.get(
+            "save_calibration_predictions",
+            False,
+        )
+    )
     input_scale = float(
         evaluation_content.get(
             "input_scale",
@@ -524,13 +534,44 @@ def main() -> None:
                 dataset, loader = loaders[
                     condition.identifier
                 ]
-                predictions = (
-                    collect_predictions(
+                calibration_predictions = (
+                    collect_calibration_predictions(
                         model=model,
                         data_loader=loader,
                         device=device,
                         input_scale=input_scale,
+                        class_names=tuple(
+                            class_names
+                        ),
                     )
+                )
+
+                if (
+                    calibration_predictions.snr_db
+                    is None
+                ):
+                    raise RuntimeError(
+                        "Evaluation predictions do "
+                        "not contain SNR values."
+                    )
+
+                predictions = PredictionResults(
+                    labels=(
+                        calibration_predictions
+                        .labels
+                    ),
+                    predictions=(
+                        calibration_predictions
+                        .predictions
+                    ),
+                    snr_db=(
+                        calibration_predictions
+                        .snr_db
+                        .astype(
+                            "float32",
+                            copy=False,
+                        )
+                    ),
                 )
                 evaluation = (
                     evaluate_predictions(
@@ -651,6 +692,16 @@ def main() -> None:
                         metrics_path.parent
                         / "predictions.npz",
                         predictions,
+                    )
+
+                if save_calibration_predictions:
+                    save_calibration_artifact(
+                        metrics_path.parent
+                        / (
+                            "calibration_"
+                            "predictions.npz"
+                        ),
+                        calibration_predictions,
                     )
 
                 accuracy = (
