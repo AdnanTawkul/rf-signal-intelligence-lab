@@ -62,4 +62,19 @@ __all__ = [
     "validate_top_k",
     "window_iq_signal",
     "write_prediction_document",
+    "IQShiftAssessment",
+    "IQShiftDetectorArtifact",
+    "ShiftThresholdSelection",
+    "load_iq_shift_detector",
+    "save_iq_shift_detector",
+    "select_shift_threshold",
 ]
+
+from rfsil.deployment.shift_detector import (
+    IQShiftAssessment,
+    IQShiftDetectorArtifact,
+    ShiftThresholdSelection,
+    load_iq_shift_detector,
+    save_iq_shift_detector,
+    select_shift_threshold,
+)

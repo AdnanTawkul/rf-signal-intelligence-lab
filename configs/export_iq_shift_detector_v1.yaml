@@ -1,0 +1,34 @@
+experiment_name: iq_shift_detector_deployment_v1
+
+input:
+  analysis_summary: results/linear_iq_shift_detection_v1/aggregate_metrics.json
+  iq_feature_directory: results/iq_channel_features_v1
+  artifact_filename: iq_channel_features.npz
+  clean_condition: clean
+
+  shifted_conditions:
+    - mild
+    - moderate
+    - severe
+
+split:
+  development_fraction: 0.50
+  split_seed: 2026
+  snr_decimals: 6
+
+feature_extraction:
+  autocorrelation_lags:
+    - 1
+    - 2
+    - 4
+    - 8
+
+  occupancy_fraction: 0.90
+  epsilon: 0.000000000001
+
+deployment:
+  artifact_name: all_iq_linear_shift_detector_v1
+  expected_sample_count: 2048
+
+output:
+  artifact_path: artifacts/iq_shift_detector_v1.json
