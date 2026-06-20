@@ -1,0 +1,19 @@
+training_manifest: results/ssl_label_efficiency_seed_sweep_v2/dry_run_manifest.json
+
+evaluation:
+  batch_size: 256
+  num_workers: 0
+  pin_memory: true
+
+temperature_scaling:
+  bin_count: 15
+  temperature_bounds:
+    - 0.05
+    - 20.0
+  optimization_tolerance: 0.000001
+  max_iterations: 200
+
+output:
+  artifact_filename: validation_calibration_predictions.npz
+  summary_filename: temperature_scaling.json
+  manifest_path: results/ssl_temperature_scaling_v1/execution_manifest.json
