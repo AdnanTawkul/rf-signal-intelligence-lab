@@ -438,7 +438,7 @@ def save_reliability_examples(
                 f"{baseline[
                     'expected_calibration_error'
                 ]:.3f}"
-                " ? "
+                " -> "
                 f"{calibrated[
                     'expected_calibration_error'
                 ]:.3f}\n"
@@ -446,7 +446,7 @@ def save_reliability_examples(
                 f"{baseline[
                     'negative_log_likelihood'
                 ]:.3f}"
-                " ? "
+                " -> "
                 f"{calibrated[
                     'negative_log_likelihood'
                 ]:.3f}"
