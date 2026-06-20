@@ -1,0 +1,26 @@
+experiment_name: ssl_calibration_prediction_backfill_v1
+training_manifest: results/ssl_label_efficiency_seed_sweep_v2/dry_run_manifest.json
+conditions:
+  clean:
+    display_name: Clean
+    test_path: data/processed/rf_modulation_baseline_v1/test.npz
+  mild:
+    display_name: Mild multipath
+    test_path: data/processed/rf_modulation_multipath_mild_v1/test.npz
+  moderate:
+    display_name: Moderate multipath
+    test_path: data/processed/rf_modulation_multipath_moderate_v1/test.npz
+  severe:
+    display_name: Severe multipath
+    test_path: data/processed/rf_modulation_multipath_severe_v1/test.npz
+evaluation:
+  batch_size: 256
+  num_workers: 0
+  pin_memory: true
+  input_scale: 1.0
+  save_predictions: false
+output:
+  directory: results/ssl_label_efficiency_held_out_v2
+calibration_backfill:
+  artifact_filename: calibration_predictions.npz
+  manifest_path: results/ssl_label_efficiency_held_out_v2/calibration_backfill_manifest.json
