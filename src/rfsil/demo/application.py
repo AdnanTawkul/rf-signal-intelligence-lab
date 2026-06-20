@@ -33,6 +33,7 @@ class DemoConfig:
     experiment_name: str
     checkpoint_search_root: Path
     preferred_checkpoint: Path | None
+    shift_detector_path: Path
     expected_sample_count: int
     input_scale: float
     default_device: str
@@ -202,6 +203,10 @@ def load_demo_config(
         root.get("checkpoint"),
         name="checkpoint",
     )
+    shift_detector = _mapping(
+        root.get("shift_detector"),
+        name="shift_detector",
+    )
     inference = _mapping(
         root.get("inference"),
         name="inference",
@@ -253,6 +258,20 @@ def load_demo_config(
         ),
         preferred_checkpoint=(
             preferred_checkpoint
+        ),
+        shift_detector_path=(
+            _resolve_project_path(
+                shift_detector.get(
+                    "artifact_path"
+                ),
+                project_root=(
+                    resolved_project_root
+                ),
+                name=(
+                    "shift_detector."
+                    "artifact_path"
+                ),
+            )
         ),
         expected_sample_count=(
             _positive_integer(

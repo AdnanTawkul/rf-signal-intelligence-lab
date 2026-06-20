@@ -9,7 +9,9 @@ import pandas as pd
 import streamlit as st
 
 from rfsil.demo import (
+    assess_single_window_shift,
     build_public_prediction_document,
+    build_shift_assessment_document,
     build_signal_view_data,
     discover_checkpoints,
     load_demo_config,
@@ -17,7 +19,11 @@ from rfsil.demo import (
     run_single_window_prediction,
     select_loaded_window,
 )
-from rfsil.deployment import IQInferenceEngine
+from rfsil.deployment import (
+    IQInferenceEngine,
+    IQShiftDetectorArtifact,
+    load_iq_shift_detector,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = (
@@ -46,6 +52,18 @@ def load_inference_engine(
         ),
     )
 
+
+
+@st.cache_resource(
+    show_spinner=False,
+)
+def load_shift_detector_artifact(
+    artifact_path: str,
+) -> IQShiftDetectorArtifact:
+    """Load and cache the IQ shift detector."""
+    return load_iq_shift_detector(
+        artifact_path
+    )
 
 def default_checkpoint_index(
     paths: list[Path],
@@ -587,12 +605,169 @@ def main() -> None:
     st.subheader(
         "Channel-shift assessment"
     )
-    st.info(
-        "The IQ shift-detector model has not "
-        "yet been serialized as a deployment "
-        "artifact. This panel will be enabled "
-        "in the next GUI implementation unit."
+    st.caption(
+        "Development-selected binary detector "
+        "over 21 deterministic IQ features. "
+        "The score is not a probability or a "
+        "channel-severity estimate."
     )
+
+    shift_key = (
+        file_digest,
+        sample_position,
+        str(config.shift_detector_path),
+    )
+
+    if st.button(
+        "Run channel-shift assessment"
+    ):
+        try:
+            with st.spinner(
+                "Extracting IQ features and "
+                "scoring channel shift..."
+            ):
+                shift_artifact = (
+                    load_shift_detector_artifact(
+                        str(
+                            config
+                            .shift_detector_path
+                        )
+                    )
+                )
+                shift_result = (
+                    assess_single_window_shift(
+                        shift_artifact,
+                        selected.iq,
+                        top_feature_count=10,
+                    )
+                )
+
+            st.session_state[
+                "demo_shift_key"
+            ] = shift_key
+            st.session_state[
+                "demo_shift_result"
+            ] = shift_result
+        except (
+            FileNotFoundError,
+            IndexError,
+            KeyError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ) as error:
+            st.error(str(error))
+
+    stored_shift_key = (
+        st.session_state.get(
+            "demo_shift_key"
+        )
+    )
+    shift_result = st.session_state.get(
+        "demo_shift_result"
+    )
+
+    if (
+        stored_shift_key == shift_key
+        and shift_result is not None
+    ):
+        if shift_result.shift_like:
+            st.warning(
+                "Shift-like IQ structure "
+                "detected at the configured "
+                "high-recall threshold."
+            )
+        else:
+            st.success(
+                "This window is below the "
+                "configured shift threshold."
+            )
+
+        shift_columns = st.columns(4)
+
+        shift_columns[0].metric(
+            "Shift score",
+            f"{shift_result.score:.4f}",
+        )
+        shift_columns[1].metric(
+            "Threshold",
+            f"{shift_result.threshold:.4f}",
+        )
+        shift_columns[2].metric(
+            "Score margin",
+            f"{shift_result.margin:+.4f}",
+        )
+        shift_columns[3].metric(
+            "Development AUROC",
+            f"{shift_result.development_auroc:.4f}",
+        )
+
+        st.caption(
+            "This operating point targets "
+            f"{100.0 * shift_result.target_tpr:.0f}% "
+            "shift recall and produced "
+            f"{100.0 * shift_result.development_fpr_at_target_tpr:.1f}% "
+            "false positives on clean "
+            "development windows. Treat one "
+            "flag as a warning, not proof of "
+            "channel degradation."
+        )
+
+        contribution_table = pd.DataFrame(
+            [
+                contribution.to_dict()
+                for contribution
+                in shift_result
+                .feature_contributions
+            ]
+        )
+
+        st.write(
+            "Largest absolute feature "
+            "contributions"
+        )
+        st.dataframe(
+            contribution_table,
+            width="stretch",
+            hide_index=True,
+        )
+
+        shift_document = (
+            build_shift_assessment_document(
+                shift_result,
+                source_name=(
+                    uploaded_file.name
+                ),
+                sample_position=(
+                    sample_position
+                ),
+                sample_index=int(
+                    selected
+                    .sample_indices[0]
+                ),
+            )
+        )
+        shift_json = (
+            json.dumps(
+                shift_document,
+                indent=2,
+            )
+            + "\n"
+        )
+
+        st.download_button(
+            "Download shift assessment JSON",
+            data=shift_json,
+            file_name=(
+                "rf_iq_shift_assessment.json"
+            ),
+            mime="application/json",
+        )
+
+        with st.expander(
+            "Shift detector details"
+        ):
+            st.json(shift_document)
 
 
 if __name__ == "__main__":

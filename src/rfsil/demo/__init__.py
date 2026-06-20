@@ -11,13 +11,23 @@ from rfsil.demo.application import (
     run_single_window_prediction,
     select_loaded_window,
 )
+from rfsil.demo.shift_service import (
+    DemoShiftAssessment,
+    FeatureContribution,
+    assess_single_window_shift,
+    build_shift_assessment_document,
+)
 
 __all__ = [
     "CheckpointOption",
     "DemoConfig",
     "DemoPrediction",
+    "DemoShiftAssessment",
+    "FeatureContribution",
     "SignalViewData",
+    "assess_single_window_shift",
     "build_public_prediction_document",
+    "build_shift_assessment_document",
     "build_signal_view_data",
     "discover_checkpoints",
     "load_demo_config",

@@ -4,6 +4,9 @@ checkpoint:
   search_root: results
   preferred_path: results/baseline_cnn_groupnorm_multipath_mixed_seed_sweep_v1/seed_2026/best_model.pt
 
+shift_detector:
+  artifact_path: artifacts/iq_shift_detector_v1.json
+
 inference:
   expected_sample_count: 2048
   input_scale: 1.0

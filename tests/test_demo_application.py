@@ -81,6 +81,9 @@ checkpoint:
   search_root: results
   preferred_path: results/example/best_model.pt
 
+shift_detector:
+  artifact_path: artifacts/iq_shift_detector_v1.json
+
 inference:
   expected_sample_count: 2048
   input_scale: 1.0
@@ -112,6 +115,14 @@ visualization:
             / "results"
             / "example"
             / "best_model.pt"
+        )
+    )
+    assert (
+        config.shift_detector_path
+        == (
+            tmp_path
+            / "artifacts"
+            / "iq_shift_detector_v1.json"
         )
     )
     assert (
