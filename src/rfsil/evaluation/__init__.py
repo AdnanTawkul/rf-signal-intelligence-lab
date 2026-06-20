@@ -23,6 +23,13 @@ from rfsil.evaluation.error_analysis import (
     ClassSNRAnalysis,
     compute_class_snr_analysis,
 )
+from rfsil.evaluation.temperature_scaling import (
+    TemperatureScalingResult,
+    apply_temperature,
+    fit_temperature,
+    negative_log_likelihood_from_logits,
+    probabilities_with_temperature,
+)
 
 __all__ = [
     "CALIBRATION_ARTIFACT_VERSION",
@@ -32,14 +39,19 @@ __all__ = [
     "ClassSNRAnalysis",
     "ClassificationEvaluation",
     "PredictionResults",
+    "TemperatureScalingResult",
+    "apply_temperature",
     "build_calibration_artifact",
     "collect_calibration_predictions",
     "collect_predictions",
     "compute_class_snr_analysis",
     "evaluate_calibration",
     "evaluate_predictions",
+    "fit_temperature",
     "load_calibration_artifact",
+    "negative_log_likelihood_from_logits",
     "probabilities_from_logits",
+    "probabilities_with_temperature",
     "save_calibration_artifact",
     "validate_calibration_artifact",
 ]
