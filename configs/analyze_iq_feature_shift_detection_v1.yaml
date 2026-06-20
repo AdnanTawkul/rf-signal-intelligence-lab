@@ -1,0 +1,23 @@
+experiment_name: iq_feature_shift_detection_v1
+
+input:
+  directory: results/iq_channel_features_v1
+  artifact_filename: iq_channel_features.npz
+  clean_condition: clean
+
+  shifted_conditions:
+    - mild
+    - moderate
+    - severe
+
+split:
+  development_fraction: 0.50
+  split_seed: 2026
+  snr_decimals: 6
+
+analysis:
+  target_tpr: 0.95
+
+output:
+  directory: results/iq_feature_shift_detection_v1
+  summary_filename: aggregate_metrics.json

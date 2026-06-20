@@ -1,0 +1,11 @@
+experiment_name: channel_shift_detector_visualization_v1
+
+input:
+  summary_path: results/channel_shift_detector_comparison_v1/aggregate_metrics.json
+
+visualization:
+  dpi: 180
+
+output:
+  directory: reports/figures
+  summary_filename: channel_shift_detector_visualization_v1.json

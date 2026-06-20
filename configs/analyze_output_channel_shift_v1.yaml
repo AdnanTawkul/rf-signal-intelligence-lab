@@ -1,0 +1,37 @@
+input:
+  artifact_root: results/ssl_label_efficiency_held_out_v2
+  artifact_filename: calibration_predictions.npz
+
+layout:
+  clean_condition: clean
+
+  shifted_conditions:
+    - mild
+    - moderate
+    - severe
+
+  fractions:
+    - labels_001pct
+    - labels_005pct
+    - labels_010pct
+    - labels_025pct
+    - labels_100pct
+
+  methods:
+    - random
+    - simclr
+    - vicreg
+
+  seeds:
+    - 2026
+    - 2027
+    - 2028
+    - 2029
+    - 2030
+
+analysis:
+  target_tpr: 0.95
+
+output:
+  directory: results/output_channel_shift_detection_v1
+  summary_filename: aggregate_metrics.json

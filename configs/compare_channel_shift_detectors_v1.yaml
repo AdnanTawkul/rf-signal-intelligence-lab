@@ -1,0 +1,44 @@
+experiment_name: channel_shift_detector_comparison_v1
+
+input:
+  iq_feature_directory: results/iq_channel_features_v1
+  iq_feature_filename: iq_channel_features.npz
+
+  calibration_directory: results/ssl_label_efficiency_held_out_v2
+  calibration_filename: calibration_predictions.npz
+
+  clean_condition: clean
+
+  shifted_conditions:
+    - mild
+    - moderate
+    - severe
+
+split:
+  development_fraction: 0.50
+  split_seed: 2026
+  snr_decimals: 6
+
+detector:
+  fold_count: 5
+  cv_seed: 2026
+
+  l2_strengths:
+    - 0.000001
+    - 0.00001
+    - 0.0001
+    - 0.001
+    - 0.01
+    - 0.1
+    - 1.0
+    - 10.0
+    - 100.0
+
+analysis:
+  target_tpr: 0.95
+  lag8_feature_name: autocorrelation_abs_lag_8
+  expected_checkpoint_count: 75
+
+output:
+  directory: results/channel_shift_detector_comparison_v1
+  summary_filename: aggregate_metrics.json

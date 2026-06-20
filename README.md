@@ -2,7 +2,7 @@
 
 A local, reproducible AI engineering project for RF modulation recognition from synthetic and public raw IQ datasets.
 
-The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, representation analysis, classifier-head refitting, confidence calibration under channel shift, deployment, long-signal inference, streaming inference, and reproducible latency benchmarking. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
+The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, representation analysis, classifier-head refitting, confidence calibration under channel shift, explicit IQ-based distribution-shift detection, deployment, long-signal inference, streaming inference, and reproducible latency benchmarking. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
 
 ## Current Status
 
@@ -53,6 +53,14 @@ The project currently includes:
 - Frozen-temperature transfer evaluation across 300 clean and multipath held-out cases
 - Selective-accuracy analysis at multiple retained-coverage levels
 - Publication-ready calibration-transfer heatmaps, temperature plots, and reliability diagrams
+- Output-only channel-shift baselines using MSP uncertainty, predictive entropy, logit margin, and energy
+- Deterministic extraction of 21 gain-invariant IQ channel features
+- Versioned IQ-feature artifacts paired across clean, mild, moderate, and severe conditions
+- Deterministic 700/700 development-test split stratified by class and SNR
+- Individual IQ-feature screening with development-only direction selection
+- Grouped-cross-validation selection of an L2-regularized all-IQ linear detector
+- 75-checkpoint comparison of lag-8 autocorrelation, all-IQ linear, output energy, and IQ-energy fusion
+- Publication-ready AUROC, FPR95, and fusion-change figures
 - Strict checkpoint-backed deployment inference
 - `.npy` and `.npz` IQ loading with complex and two-channel real input support
 - Fixed-window batch prediction with confidence and top-k JSON output
@@ -62,7 +70,7 @@ The project currently includes:
 - Timestamped online predictions
 - Fresh-process CPU and CUDA latency benchmarks
 - Throughput and CUDA-memory scaling analysis
-- 840 automated tests with `pytest`
+- 1,051 automated tests with `pytest`
 - Static analysis with Ruff
 
 For the original clean-channel benchmark, the selected system remains the GroupNorm CNN with a validation-selected frozen linear-head refit. For frequency-selective multipath, the selected maximum-robustness model uses a jointly trained residual signal front end, while a frozen-backbone variant provides parameter-efficient adaptation by training only 2,944 parameters. For zero-shot transfer to RadioML 2016.10A, the plain mixed-I/Q baseline is selected because it reaches 52.54% accuracy across all 20 SNR levels and 67.03% on the shared six-SNR grid without dataset-specific calibration. A validation-selected `×112` input scale restores the frozen residual model to statistically comparable performance, but that result is treated as a post-hoc diagnostic.
@@ -71,7 +79,11 @@ The self-supervised label-efficiency milestone evaluates SimCLR, VICReg, and ran
 
 The deployment milestone provides a complete path from trained checkpoint to fixed-window, long-signal, and streaming IQ inference. CPU batch-one steady-state latency is 1.32 ms. CUDA reaches 54,501.9 windows per second at batch size 128, a 26.82× throughput improvement over CPU at the same batch size, while using 107.4 MiB of peak PyTorch-allocated GPU memory.
 
-The confidence-calibration milestone fits one scalar temperature per checkpoint on clean validation logits and transfers the frozen temperatures to 300 held-out clean and multipath evaluations. Calibration improves clean NLL and ECE in 71 of 75 models, but usually worsens confidence quality under multipath. The next major research milestones are uncertainty estimation, ONNX export, optimized inference, and an interactive demo.
+The confidence-calibration milestone fits one scalar temperature per checkpoint on clean validation logits and transfers the frozen temperatures to 300 held-out clean and multipath evaluations. Calibration improves clean NLL and ECE in 71 of 75 models, but usually worsens confidence quality under multipath.
+
+The channel-shift detection milestone then tests whether the model outputs themselves can identify that failure. Output energy remains close to chance across mild, moderate, and severe multipath, while explicit IQ-derived features are substantially stronger. The selected primary detector is a development-selected L2-regularized linear model over 21 deterministic IQ features. It reaches AUROC values of 0.8312, 0.9512, and 0.9794 on mild, moderate, and severe multipath, respectively. An IQ-plus-energy fusion variant slightly lowers mean FPR at 95% shift recall but does not improve mean AUROC overall.
+
+The next major research milestones are channel-aware calibration, uncertainty estimation, ONNX export, optimized inference, and an interactive demo.
 
 ## Selected Supervised Baseline
 
@@ -278,6 +290,67 @@ Selective-accuracy changes remain very small and slightly negative on average. S
 ![Representative reliability diagrams](reports/figures/ssl_calibration_reliability_examples_v1.png)
 
 Complete methodology, artifact integrity checks, transfer results, reliability analysis, limitations, and deployment recommendations are documented in [SSL Confidence Calibration Under Channel Shift v1](reports/ssl_confidence_calibration_v1.md).
+
+## Channel-Shift Detection from IQ Features
+
+The channel-shift milestone asks whether a deployed classifier can recognize that its RF input distribution has moved from the clean channel to frequency-selective multipath.
+
+The evaluation uses four row-aligned held-out datasets containing 1,400 examples each:
+
+- Clean
+- Mild multipath
+- Moderate multipath
+- Severe multipath
+
+Labels, SNR values, frequency offsets, phase offsets, amplitude scales, timing shifts, fading flags, and example seeds are identical across conditions. A deterministic class/SNR-stratified split assigns 700 paired examples to development and 700 paired examples to untouched testing across 28 strata.
+
+### Detector Systems
+
+| System | Input | Selection protocol |
+|---|---|---|
+| Lag-8 autocorrelation | One IQ feature | Direction selected on pooled development data |
+| All-IQ linear | 21 deterministic IQ features | Standardization and L2 selected with grouped development-only cross-validation |
+| Output energy | Checkpoint logits | Direction selected on pooled development data for each checkpoint |
+| IQ + energy fusion | 21 IQ features plus checkpoint energy | Standardization and L2 selected with grouped development-only cross-validation |
+
+The grouped folds keep every clean/shifted version of one `example_seed` in the same fold. Test examples are not used for feature direction, regularization selection, standardization, or coefficient fitting.
+
+### Aggregate Results Across 75 Checkpoints
+
+| Condition | System | Mean AUROC | Mean AP | Mean FPR@95TPR |
+|---|---|---:|---:|---:|
+| Mild | Lag-8 autocorrelation | 0.8019 | 0.8337 | 0.7529 |
+| Mild | **All-IQ linear** | **0.8312** | **0.8619** | 0.7671 |
+| Mild | Output energy | 0.5275 | 0.5293 | 0.9156 |
+| Mild | IQ + energy fusion | 0.8281 | 0.8573 | **0.7366** |
+| Moderate | Lag-8 autocorrelation | 0.9314 | 0.9486 | 0.4157 |
+| Moderate | All-IQ linear | 0.9512 | 0.9614 | **0.3129** |
+| Moderate | Output energy | 0.5328 | 0.5533 | 0.9052 |
+| Moderate | **IQ + energy fusion** | **0.9521** | **0.9621** | 0.3173 |
+| Severe | Lag-8 autocorrelation | 0.9497 | 0.9614 | 0.3800 |
+| Severe | All-IQ linear | 0.9794 | **0.9829** | 0.1229 |
+| Severe | Output energy | 0.4843 | 0.5236 | 0.9275 |
+| Severe | **IQ + energy fusion** | **0.9798** | 0.9828 | **0.1200** |
+
+Across the three shifted conditions, the all-IQ detector reaches a mean AUROC of **0.9206**. The fusion detector reaches **0.9200** mean AUROC and the best mean FPR@95TPR, **0.3913** versus **0.4010** for all-IQ.
+
+The primary selection is:
+
+> **Use the all-IQ linear detector as the default channel-shift detector. Retain IQ-plus-energy fusion as an optional operating-point variant when a modest FPR95 reduction is more important than maximum mean AUROC.**
+
+Output energy alone is not suitable for deployment shift detection. Its direction changes with severity: mild and moderate multipath move mean energy upward relative to clean, while severe multipath moves it downward. The IQ features remain robust because they measure the signal geometry and temporal/spectral structure directly.
+
+The remaining weakness is mild multipath. Even the best mild operating point has FPR@95TPR of 0.7366, so detecting 95% of mild shifts would still flag many clean windows.
+
+![Channel-shift detector AUROC](reports/figures/channel_shift_detector_auroc_v1.png)
+
+![Channel-shift detector FPR at 95% recall](reports/figures/channel_shift_detector_fpr95_v1.png)
+
+![Fusion AUROC change relative to each baseline](reports/figures/channel_shift_fusion_auroc_change_v1.png)
+
+![Fusion FPR95 change relative to each baseline](reports/figures/channel_shift_fusion_fpr95_change_v1.png)
+
+Complete feature definitions, leakage controls, development protocol, 900-comparison results, system selection, limitations, and reproduction commands are documented in [Channel-Shift Detection from IQ Features v1](reports/channel_shift_detection_v1.md).
 
 ## Deployment and IQ Inference
 
@@ -790,6 +863,52 @@ python scripts\visualize_ssl_calibration.py `
   --config configs\visualize_ssl_calibration_v1.yaml
 ```
 
+## Reproduce the Channel-Shift Detection Study
+
+The following commands assume that the paired clean and multipath test datasets and the 300 calibration-prediction artifacts are available locally.
+
+Extract and validate the 21 deterministic IQ features:
+
+```powershell
+python scripts\extract_iq_channel_features.py `
+  --config configs\extract_iq_channel_features_v1.yaml
+```
+
+Evaluate every feature individually with development-only direction selection:
+
+```powershell
+python scripts\analyze_iq_feature_shift_detection.py `
+  --config configs\analyze_iq_feature_shift_detection_v1.yaml
+```
+
+Fit the grouped-cross-validation all-IQ linear detector:
+
+```powershell
+python scripts\analyze_linear_iq_shift_detection.py `
+  --config configs\analyze_linear_iq_shift_detection_v1.yaml
+```
+
+Regenerate the output-only uncertainty baseline:
+
+```powershell
+python scripts\analyze_output_channel_shift.py `
+  --config configs\analyze_output_channel_shift_v1.yaml
+```
+
+Run the 75-checkpoint, four-system comparison:
+
+```powershell
+python scripts\compare_channel_shift_detectors.py `
+  --config configs\compare_channel_shift_detectors_v1.yaml
+```
+
+Regenerate the publication-ready figures:
+
+```powershell
+python scripts\visualize_channel_shift_detectors.py `
+  --config configs\visualize_channel_shift_detectors_v1.yaml
+```
+
 ## Run Deployment Inference
 
 The following examples use a compatible trained checkpoint. Replace the checkpoint and input paths as required.
@@ -904,7 +1023,7 @@ Check whitespace and patch integrity:
 git diff --check
 ```
 
-At the current milestone, the repository contains **840 passing tests**.
+At the current milestone, the repository contains **1,051 passing tests**.
 
 ## Repository Structure
 
@@ -979,6 +1098,11 @@ It does not include:
 - Scalar temperature scaling is implemented, but clean-validation calibration does not transfer reliably to multipath channel shift.
 - The same validation split is used for checkpoint selection and temperature fitting; a separate calibration split would provide a cleaner statistical protocol.
 - ECE and MCE depend on binning and can be unstable in sparsely populated bins; NLL and Brier score are treated as the primary proper scoring rules.
+- Model-output uncertainty is not a reliable multipath detector; even output energy remains near chance and reverses direction under severe shift.
+- The IQ detector is evaluated on paired synthetic channel variants. Transfer to unpaired distributions, different receivers, and over-the-air recordings is not yet established.
+- Mild multipath remains difficult at high recall: the best observed mild FPR@95TPR is 0.7366.
+- The current IQ feature definitions were validated on 2,048-sample windows; transfer across sample rates and window lengths still requires study.
+- Channel-aware confidence calibration that conditions on detected shift is not yet implemented.
 - Uncertainty estimation beyond scalar confidence calibration is not yet implemented.
 - The SimCLR and VICReg downstream studies each reuse one fixed pretrained checkpoint, so SSL-pretraining variance is not yet measured.
 - The SSL study uses five paired downstream seeds and should be interpreted through paired changes and consistency counts rather than broad statistical claims.
@@ -1051,12 +1175,19 @@ It does not include:
 - [x] 300-evaluation held-out calibration transfer study
 - [x] Reliability diagrams and selective-accuracy analysis
 - [x] Confidence-calibration technical report
+- [x] Output-only channel-shift uncertainty baseline across 75 checkpoints
+- [x] Deterministic 21-feature IQ channel representation
+- [x] Versioned paired IQ-feature artifacts
+- [x] Class/SNR-stratified paired development-test split
+- [x] Individual IQ-feature shift-detection study
+- [x] Grouped-CV all-IQ linear shift detector
+- [x] 75-checkpoint lag-8, all-IQ, energy, and fusion comparison
+- [x] Channel-shift detector figures and technical report
 
 ### Next
 
 - [ ] Low-SNR-aware training experiments
 - [ ] Channel-aware calibration
-- [ ] Distribution-shift detection
 - [ ] Uncertainty estimation
 - [ ] ONNX export
 - [ ] Mixed-precision inference
