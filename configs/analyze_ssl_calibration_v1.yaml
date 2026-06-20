@@ -1,0 +1,17 @@
+training_manifest: results/ssl_label_efficiency_seed_sweep_v2/dry_run_manifest.json
+held_out_evaluation_config: configs/backfill_ssl_calibration_predictions_v1.yaml
+
+analysis:
+  bin_count: 15
+  coverages:
+    - 1.0
+    - 0.95
+    - 0.9
+    - 0.8
+    - 0.5
+  artifact_filename: calibration_predictions.npz
+  temperature_summary_filename: temperature_scaling.json
+
+output:
+  directory: results/ssl_calibration_analysis_v1
+  summary_filename: aggregate_metrics.json
