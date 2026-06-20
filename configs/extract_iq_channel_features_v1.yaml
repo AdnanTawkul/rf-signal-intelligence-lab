@@ -1,0 +1,29 @@
+experiment_name: iq_channel_features_v1
+
+conditions:
+  clean:
+    test_path: data/processed/rf_modulation_baseline_v1/test.npz
+
+  mild:
+    test_path: data/processed/rf_modulation_multipath_mild_v1/test.npz
+
+  moderate:
+    test_path: data/processed/rf_modulation_multipath_moderate_v1/test.npz
+
+  severe:
+    test_path: data/processed/rf_modulation_multipath_severe_v1/test.npz
+
+features:
+  autocorrelation_lags:
+    - 1
+    - 2
+    - 4
+    - 8
+
+  occupancy_fraction: 0.90
+  epsilon: 1.0e-12
+
+output:
+  directory: results/iq_channel_features_v1
+  artifact_filename: iq_channel_features.npz
+  manifest_filename: manifest.json
