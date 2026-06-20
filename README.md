@@ -2,7 +2,7 @@
 
 A local, reproducible AI engineering project for RF modulation recognition from synthetic and public raw IQ datasets.
 
-The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, representation analysis, classifier-head refitting, and deployment-oriented extensions. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
+The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, representation analysis, classifier-head refitting, deployment, long-signal inference, streaming inference, and reproducible latency benchmarking. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
 
 ## Current Status
 
@@ -47,12 +47,23 @@ The project currently includes:
 - Resumable 75-run downstream training and 300-evaluation held-out test matrix
 - Paired SSL-versus-random analysis across clean, mild, moderate, and severe conditions
 - Pooled confusion-matrix analysis for selected SSL systems
+- Strict checkpoint-backed deployment inference
+- `.npy` and `.npz` IQ loading with complex and two-channel real input support
+- Fixed-window batch prediction with confidence and top-k JSON output
+- Long-signal sliding-window inference with overlap and remainder handling
+- Valid-sample-weighted signal-level probability aggregation
+- Fixed-memory streaming inference with configurable hop size
+- Timestamped online predictions
+- Fresh-process CPU and CUDA latency benchmarks
+- Throughput and CUDA-memory scaling analysis
 - Automated tests with `pytest`
 - Static analysis with Ruff
 
 For the original clean-channel benchmark, the selected system remains the GroupNorm CNN with a validation-selected frozen linear-head refit. For frequency-selective multipath, the selected maximum-robustness model uses a jointly trained residual signal front end, while a frozen-backbone variant provides parameter-efficient adaptation by training only 2,944 parameters. For zero-shot transfer to RadioML 2016.10A, the plain mixed-I/Q baseline is selected because it reaches 52.54% accuracy across all 20 SNR levels and 67.03% on the shared six-SNR grid without dataset-specific calibration. A validation-selected `×112` input scale restores the frozen residual model to statistically comparable performance, but that result is treated as a post-hoc diagnostic.
 
-The self-supervised label-efficiency milestone evaluates SimCLR, VICReg, and random initialization across five labeled-data fractions using an exact 1,320-update budget. SimCLR is selected as a clean-channel specialist with 1% labels, VICReg is selected as the balanced 5% label-efficient model and as the strongest robustness-oriented model with 10% labels, and random initialization remains the selected full-label model. The next major research milestones are uncertainty calibration, ONNX export, local latency benchmarking, and a Streamlit demo.
+The self-supervised label-efficiency milestone evaluates SimCLR, VICReg, and random initialization across five labeled-data fractions using an exact 1,320-update budget. SimCLR is selected as a clean-channel specialist with 1% labels, VICReg is selected as the balanced 5% label-efficient model and as the strongest robustness-oriented model with 10% labels, and random initialization remains the selected full-label model.
+
+The deployment milestone provides a complete path from trained checkpoint to fixed-window, long-signal, and streaming IQ inference. CPU batch-one steady-state latency is 1.32 ms. CUDA reaches 54,501.9 windows per second at batch size 128, a 26.82× throughput improvement over CPU at the same batch size, while using 107.4 MiB of peak PyTorch-allocated GPU memory. The next major research milestones are confidence calibration, uncertainty estimation, ONNX export, optimized inference, and an interactive demo.
 
 ## Selected Supervised Baseline
 
@@ -211,6 +222,58 @@ The main conclusions are:
 ![Selected pooled SSL confusion-matrix comparisons](reports/figures/ssl_label_efficiency_selected_confusions_v2.png)
 
 Detailed protocol, paired validation results, held-out channel evaluation, pooled confusion matrices, selected systems, limitations, and reproduction commands are documented in [SSL Label-Efficiency Evaluation v2](reports/ssl_label_efficiency_v2.md).
+
+## Deployment and IQ Inference
+
+The deployment milestone turns the selected PyTorch checkpoints into reusable local inference components for fixed windows, long recordings, and streaming IQ data.
+
+### Supported Workflows
+
+- Strict checkpoint reconstruction with model-configuration and class-order validation
+- CPU, CUDA, and automatic device selection
+- Single-window and batched prediction
+- `.npy` and `.npz` input loading
+- Complex IQ vectors and real `[2, samples]` tensors
+- Dataset sample selection with optional labels and SNR metadata
+- Full logits, probabilities, confidence, and top-k rankings
+- Machine-readable JSON output
+- Sliding-window long-signal inference
+- Configurable stride, overlap, padding, dropping, and exact-length enforcement
+- Valid-sample-weighted signal-level aggregation
+- Fixed-memory streaming buffers
+- Configurable streaming hop size and chunk size
+- Absolute sample positions and optional timestamps
+- Fresh-process CPU and CUDA benchmarks
+
+### Fresh-Process Benchmark Results
+
+The benchmark uses the validation-selected full-label random-initialization checkpoint, 2,048-sample IQ windows, 30 warm-up iterations, and 200 measured iterations per case.
+
+| Device | Batch | Mean latency | P95 latency | Throughput | Peak CUDA memory |
+|---|---:|---:|---:|---:|---:|
+| CPU | 1 | 1.32 ms | 1.65 ms | 759.6 windows/s | — |
+| CPU | 32 | 14.09 ms | 15.56 ms | **2,270.7 windows/s** | — |
+| CUDA | 1 | **1.10 ms** | **1.45 ms** | 910.5 windows/s | 10.4 MiB |
+| CUDA | 32 | 1.54 ms | 2.05 ms | 20,715.3 windows/s | 33.9 MiB |
+| CUDA | 128 | 2.35 ms | 3.12 ms | **54,501.9 windows/s** | 107.4 MiB |
+
+Key deployment conclusions:
+
+- CPU is suitable for low-volume interactive requests and low-rate single streams.
+- CPU throughput peaks at 2,270.7 windows per second with batch size 32.
+- CUDA becomes clearly advantageous once independent windows can be batched.
+- CUDA reaches 54,501.9 windows per second with batch size 128.
+- At batch size 128, CUDA provides a 26.82× throughput improvement over CPU.
+- CUDA batch-one steady-state latency is 1.10 ms, but the first CUDA inference takes approximately 185–225 ms because of one-time runtime and kernel initialization.
+- Production CUDA deployment should use a persistent, warmed process rather than launching a new process for every prediction.
+
+![Steady-state deployment inference latency](reports/figures/deployment_inference_latency_v1.png)
+
+![Deployment inference throughput scaling](reports/figures/deployment_inference_throughput_v1.png)
+
+![CUDA inference memory scaling](reports/figures/deployment_inference_memory_v1.png)
+
+Architecture, input contracts, command-line workflows, streaming behavior, benchmark protocol, complete results, limitations, and deployment recommendations are documented in [Deployment and IQ Inference Evaluation v1](reports/deployment_inference_v1.md).
 
 ## Why the Frozen Head Refit Was Selected
 
@@ -641,6 +704,77 @@ python scripts\analyze_ssl_label_efficiency.py `
   --config configs\analyze_ssl_label_efficiency_v2.yaml
 ```
 
+## Run Deployment Inference
+
+The following examples use a compatible trained checkpoint. Replace the checkpoint and input paths as required.
+
+### Fixed-window prediction
+
+```powershell
+python scripts\predict_iq.py `
+  --checkpoint results\ssl_label_efficiency_seed_sweep_v2\labels_100pct\random\seed_2026\best_model.pt `
+  --input data\processed\rf_modulation_baseline_v1\test.npz `
+  --sample-index 0 `
+  --device auto `
+  --expected-samples 2048 `
+  --top-k 4 `
+  --output results\deployment_inference_v1\sample_prediction.json
+```
+
+### Long-signal sliding-window prediction
+
+```powershell
+python scripts\predict_long_iq.py `
+  --checkpoint results\ssl_label_efficiency_seed_sweep_v2\labels_100pct\random\seed_2026\best_model.pt `
+  --input path\to\long_signal.npy `
+  --device auto `
+  --window-size 2048 `
+  --stride 1024 `
+  --remainder pad `
+  --batch-size 32 `
+  --top-k 4 `
+  --output results\deployment_inference_v1\long_prediction.json
+```
+
+### File-backed streaming simulation
+
+```powershell
+python scripts\stream_iq.py `
+  --checkpoint results\ssl_label_efficiency_seed_sweep_v2\labels_100pct\random\seed_2026\best_model.pt `
+  --input path\to\long_signal.npy `
+  --device auto `
+  --window-size 2048 `
+  --hop-size 1024 `
+  --chunk-size 256 `
+  --sample-rate-hz 1000000 `
+  --output results\deployment_inference_v1\stream_prediction.json
+```
+
+### Run one benchmark matrix
+
+```powershell
+python scripts\benchmark_inference.py `
+  --checkpoint results\ssl_label_efficiency_seed_sweep_v2\labels_100pct\random\seed_2026\best_model.pt `
+  --input data\processed\rf_modulation_baseline_v1\test.npz `
+  --device cpu `
+  --device cuda `
+  --batch-size 1 `
+  --batch-size 8 `
+  --batch-size 32 `
+  --batch-size 128 `
+  --expected-samples 2048 `
+  --warmup-iterations 30 `
+  --measurement-iterations 200 `
+  --output results\deployment_benchmark_v1\benchmark.json
+```
+
+### Regenerate benchmark analysis and figures
+
+```powershell
+python scripts\analyze_deployment_benchmark.py `
+  --input-directory results\deployment_benchmark_v1\full_cases
+```
+
 ## Reproduce Historical Ablations
 
 ### Original BatchNorm five-seed study
@@ -684,7 +818,7 @@ Check whitespace and patch integrity:
 git diff --check
 ```
 
-At the current milestone, the repository contains **620 passing tests**.
+At the current milestone, the repository contains **723 passing tests**.
 
 ## Repository Structure
 
@@ -759,7 +893,10 @@ It does not include:
 - Confidence calibration and uncertainty estimation are not yet implemented.
 - The SimCLR and VICReg downstream studies each reuse one fixed pretrained checkpoint, so SSL-pretraining variance is not yet measured.
 - The SSL study uses five paired downstream seeds and should be interpreted through paired changes and consistency counts rather than broad statistical claims.
-- Deployment benchmarking and ONNX export are not yet implemented.
+- Deployment benchmarking is complete on one local workstation, but the results are hardware-, driver-, operating-system-, and checkpoint-specific.
+- The benchmark excludes file-reading, JSON-serialization, acquisition-device, and network-service overhead.
+- The first CUDA inference has a substantial one-time initialization cost, so the reported steady-state results assume a persistent warmed process.
+- ONNX, TensorRT, quantization, and mixed-precision deployment are not yet implemented.
 
 ## Roadmap
 
@@ -808,6 +945,18 @@ It does not include:
 - [x] Paired SSL-versus-random change analysis
 - [x] Selected pooled SSL confusion matrices
 - [x] SSL label-efficiency technical report
+- [x] Strict checkpoint-backed inference engine
+- [x] NPY and NPZ deployment IQ loader
+- [x] Confidence and top-k JSON prediction CLI
+- [x] Long-signal sliding-window inference
+- [x] Valid-sample-weighted signal aggregation
+- [x] Fixed-memory streaming IQ inference
+- [x] Configurable streaming hop size and timestamps
+- [x] Fresh-process CPU and CUDA benchmark matrix
+- [x] Latency, throughput, and CUDA-memory analysis
+- [x] Deployment benchmark figures
+- [x] Deployment and IQ inference technical report
+- [x] Deployment milestone README finalization
 
 ### Next
 
@@ -815,9 +964,11 @@ It does not include:
 - [ ] Confidence calibration
 - [ ] Uncertainty estimation
 - [ ] ONNX export
-- [ ] Local latency benchmark
+- [ ] Mixed-precision inference
+- [ ] Quantization experiments
+- [ ] Persistent local inference service
 - [ ] Streamlit demo
-- [ ] SSL milestone README finalization and GitHub release
+- [ ] Over-the-air receiver-data evaluation
 - [ ] Final project-wide technical report
 
 ## License
