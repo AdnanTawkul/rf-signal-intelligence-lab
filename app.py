@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 import json
@@ -9,6 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from rfsil.demo import (
+    analyze_long_iq,
     assess_single_window_shift,
     build_public_prediction_document,
     build_shift_assessment_document,
@@ -211,6 +212,16 @@ def render_signal_plots(
             clear_figure=True,
         )
         plt.close(spectrum_figure)
+
+def dataframe_to_csv(
+    dataframe: pd.DataFrame,
+) -> str:
+    """Serialize a displayed table as CSV."""
+    return dataframe.to_csv(
+        index=False,
+        lineterminator="\n",
+    )
+
 
 
 def main() -> None:
@@ -567,6 +578,18 @@ def main() -> None:
             hide_index=True,
         )
 
+        st.download_button(
+            "Download probability table CSV",
+            data=dataframe_to_csv(
+                probability_table
+            ),
+            file_name=(
+                "rf_iq_prediction_probabilities.csv"
+            ),
+            mime="text/csv",
+            key="single_prediction_csv",
+        )
+
         export_document = (
             build_public_prediction_document(
                 result.document,
@@ -732,6 +755,18 @@ def main() -> None:
             hide_index=True,
         )
 
+        st.download_button(
+            "Download feature contributions CSV",
+            data=dataframe_to_csv(
+                contribution_table
+            ),
+            file_name=(
+                "rf_iq_shift_feature_contributions.csv"
+            ),
+            mime="text/csv",
+            key="shift_contributions_csv",
+        )
+
         shift_document = (
             build_shift_assessment_document(
                 shift_result,
@@ -768,6 +803,519 @@ def main() -> None:
             "Shift detector details"
         ):
             st.json(shift_document)
+
+
+    st.divider()
+    st.header(
+        "Long-signal and batch analysis"
+    )
+    st.caption(
+        "Analyze either one continuous IQ "
+        "recording or a pre-windowed IQ batch. "
+        "For a dataset batch, the horizontal "
+        "axis represents window order rather "
+        "than continuous time."
+    )
+
+    long_uploaded_file = st.file_uploader(
+        "Upload a long signal or IQ batch",
+        type=[
+            "npy",
+            "npz",
+        ],
+        key="long_iq_upload",
+    )
+
+    if long_uploaded_file is not None:
+        long_uploaded_bytes = (
+            long_uploaded_file.getvalue()
+        )
+
+        try:
+            long_loaded = load_uploaded_iq(
+                filename=(
+                    long_uploaded_file.name
+                ),
+                content=(
+                    long_uploaded_bytes
+                ),
+                array_key=array_key,
+                expected_sample_count=None,
+            )
+        except (
+            FileNotFoundError,
+            IndexError,
+            KeyError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ) as error:
+            st.error(str(error))
+            long_loaded = None
+
+        if long_loaded is not None:
+            detected_mode = (
+                "Pre-windowed batch"
+                if long_loaded.batch_size > 1
+                else "Continuous signal"
+            )
+
+            long_metadata = st.columns(4)
+
+            long_metadata[0].metric(
+                "Detected mode",
+                detected_mode,
+            )
+            long_metadata[1].metric(
+                "Source items",
+                long_loaded.batch_size,
+            )
+            long_metadata[2].metric(
+                "Samples/item",
+                long_loaded.sample_count,
+            )
+            long_metadata[3].metric(
+                "File size",
+                f"{len(long_uploaded_bytes) / 1024:.1f} KiB",
+            )
+
+            is_prewindowed = (
+                long_loaded.batch_size > 1
+            )
+
+            control_columns = st.columns(4)
+
+            long_stride = int(
+                control_columns[0].number_input(
+                    "Stride",
+                    min_value=1,
+                    value=int(
+                        config
+                        .long_signal_default_stride
+                    ),
+                    step=1,
+                    disabled=is_prewindowed,
+                    help=(
+                        "Used only for one "
+                        "continuous signal."
+                    ),
+                )
+            )
+
+            remainder_options = [
+                "drop",
+                "pad",
+                "error",
+            ]
+            default_remainder_index = (
+                remainder_options.index(
+                    config
+                    .long_signal_default_remainder_policy
+                )
+            )
+
+            long_remainder = (
+                control_columns[1].selectbox(
+                    "Remainder policy",
+                    options=(
+                        remainder_options
+                    ),
+                    index=(
+                        default_remainder_index
+                    ),
+                    disabled=is_prewindowed,
+                )
+            )
+
+            long_batch_size = int(
+                control_columns[2].number_input(
+                    "Inference batch size",
+                    min_value=1,
+                    value=int(
+                        config
+                        .long_signal_default_batch_size
+                    ),
+                    step=1,
+                )
+            )
+
+            long_maximum_windows = int(
+                control_columns[3].number_input(
+                    "Maximum windows",
+                    min_value=1,
+                    value=int(
+                        config
+                        .long_signal_default_maximum_windows
+                    ),
+                    step=1,
+                    help=(
+                        "Limits interactive "
+                        "processing time."
+                    ),
+                )
+            )
+
+            long_digest = hashlib.sha256(
+                long_uploaded_bytes
+            ).hexdigest()
+
+            long_analysis_key = (
+                long_digest,
+                str(checkpoint_path),
+                device,
+                long_stride,
+                long_remainder,
+                long_batch_size,
+                long_maximum_windows,
+            )
+
+            if st.button(
+                "Run long-signal analysis",
+                type="primary",
+            ):
+                try:
+                    with st.spinner(
+                        "Windowing, classifying, "
+                        "and assessing IQ shift..."
+                    ):
+                        long_engine = (
+                            load_inference_engine(
+                                str(
+                                    checkpoint_path
+                                ),
+                                device,
+                                config.input_scale,
+                                config
+                                .expected_sample_count,
+                            )
+                        )
+                        long_shift_detector = (
+                            load_shift_detector_artifact(
+                                str(
+                                    config
+                                    .shift_detector_path
+                                )
+                            )
+                        )
+                        long_result = (
+                            analyze_long_iq(
+                                loaded=long_loaded,
+                                engine=long_engine,
+                                shift_detector=(
+                                    long_shift_detector
+                                ),
+                                window_size=(
+                                    config
+                                    .expected_sample_count
+                                ),
+                                stride=long_stride,
+                                remainder_policy=(
+                                    long_remainder
+                                ),
+                                batch_size=(
+                                    long_batch_size
+                                ),
+                                maximum_windows=(
+                                    long_maximum_windows
+                                ),
+                            )
+                        )
+
+                    st.session_state[
+                        "long_analysis_key"
+                    ] = long_analysis_key
+                    st.session_state[
+                        "long_analysis_result"
+                    ] = long_result
+                except (
+                    FileNotFoundError,
+                    IndexError,
+                    KeyError,
+                    RuntimeError,
+                    TypeError,
+                    ValueError,
+                ) as error:
+                    st.error(str(error))
+
+            stored_long_key = (
+                st.session_state.get(
+                    "long_analysis_key"
+                )
+            )
+            long_result = (
+                st.session_state.get(
+                    "long_analysis_result"
+                )
+            )
+
+            if (
+                stored_long_key
+                == long_analysis_key
+                and long_result is not None
+            ):
+                if long_result.truncated:
+                    st.warning(
+                        "Only the first "
+                        f"{long_result.analyzed_window_count} "
+                        "windows were analyzed "
+                        "because of the configured "
+                        "maximum."
+                    )
+
+                summary_columns = st.columns(5)
+
+                summary_columns[0].metric(
+                    "Analysis mode",
+                    (
+                        "Batch"
+                        if long_result.source_mode
+                        == "prewindowed_batch"
+                        else "Sliding windows"
+                    ),
+                )
+                summary_columns[1].metric(
+                    "Windows analyzed",
+                    (
+                        long_result
+                        .analyzed_window_count
+                    ),
+                )
+                summary_columns[2].metric(
+                    "Aggregate modulation",
+                    (
+                        long_result
+                        .aggregate_predicted_label
+                    ),
+                )
+                summary_columns[3].metric(
+                    "Aggregate confidence",
+                    f"{100.0 * long_result.aggregate_confidence:.2f}%",
+                )
+                summary_columns[4].metric(
+                    "Shift-like windows",
+                    f"{100.0 * long_result.shift_like_fraction:.1f}%",
+                )
+
+                aggregate_table = pd.DataFrame(
+                    {
+                        "label": (
+                            long_result.class_names
+                        ),
+                        "probability": (
+                            long_result
+                            .aggregate_probabilities
+                        ),
+                    }
+                )
+
+                st.subheader(
+                    "Aggregate probabilities"
+                )
+                st.bar_chart(
+                    aggregate_table.set_index(
+                        "label"
+                    )["probability"]
+                )
+
+                st.dataframe(
+                    aggregate_table,
+                    width="stretch",
+                    hide_index=True,
+                )
+
+                st.download_button(
+                    (
+                        "Download aggregate "
+                        "probabilities CSV"
+                    ),
+                    data=dataframe_to_csv(
+                        aggregate_table
+                    ),
+                    file_name=(
+                        "rf_long_iq_aggregate_"
+                        "probabilities.csv"
+                    ),
+                    mime="text/csv",
+                    key=(
+                        "long_aggregate_"
+                        "probabilities_csv"
+                    ),
+                )
+
+                records = [
+                    {
+                        "window_index": (
+                            record.window_index
+                        ),
+                        "source_sample_index": (
+                            record
+                            .source_sample_index
+                        ),
+                        "start_sample": (
+                            record.start_sample
+                        ),
+                        "stop_sample_exclusive": (
+                            record
+                            .stop_sample_exclusive
+                        ),
+                        "predicted_index": (
+                            record.predicted_index
+                        ),
+                        "predicted_label": (
+                            record.predicted_label
+                        ),
+                        "confidence": (
+                            record.confidence
+                        ),
+                        "shift_score": (
+                            record.shift_score
+                        ),
+                        "shift_threshold": (
+                            record.shift_threshold
+                        ),
+                        "shift_like": (
+                            record.shift_like
+                        ),
+                        "true_index": (
+                            record.true_index
+                        ),
+                        "snr_db": record.snr_db,
+                    }
+                    for record
+                    in long_result.window_records
+                ]
+                records_table = pd.DataFrame(
+                    records
+                )
+
+                st.subheader(
+                    "Window confidence"
+                )
+                st.line_chart(
+                    records_table.set_index(
+                        "window_index"
+                    )[["confidence"]]
+                )
+
+                st.subheader(
+                    "Channel-shift score"
+                )
+                st.line_chart(
+                    records_table.set_index(
+                        "window_index"
+                    )[
+                        [
+                            "shift_score",
+                            "shift_threshold",
+                        ]
+                    ]
+                )
+
+                class_figure, class_axis = (
+                    plt.subplots(
+                        figsize=(10.5, 3.5)
+                    )
+                )
+                class_axis.step(
+                    records_table[
+                        "window_index"
+                    ],
+                    records_table[
+                        "predicted_index"
+                    ],
+                    where="mid",
+                )
+                class_axis.set_yticks(
+                    range(
+                        len(
+                            long_result
+                            .class_names
+                        )
+                    ),
+                    labels=(
+                        long_result
+                        .class_names
+                    ),
+                )
+                class_axis.set_xlabel(
+                    "Window index"
+                )
+                class_axis.set_ylabel(
+                    "Predicted class"
+                )
+                class_axis.set_title(
+                    "Per-window modulation"
+                )
+                class_axis.grid(
+                    alpha=0.25
+                )
+                class_figure.tight_layout()
+
+                st.pyplot(
+                    class_figure,
+                    clear_figure=True,
+                )
+                plt.close(class_figure)
+
+                st.subheader(
+                    "Window results"
+                )
+                st.dataframe(
+                    records_table,
+                    width="stretch",
+                    hide_index=True,
+                )
+
+                long_json = (
+                    long_result.to_json(
+                        source_name=(
+                            long_uploaded_file.name
+                        ),
+                        checkpoint_reference=(
+                            checkpoint_labels[
+                                checkpoint_index
+                            ]
+                        ),
+                        detector_name=(
+                            load_shift_detector_artifact(
+                                str(
+                                    config
+                                    .shift_detector_path
+                                )
+                            ).artifact_name
+                        ),
+                        top_k=config.top_k,
+                    )
+                )
+                long_csv = (
+                    long_result.to_csv()
+                )
+
+                download_columns = (
+                    st.columns(2)
+                )
+
+                download_columns[
+                    0
+                ].download_button(
+                    "Download long-analysis JSON",
+                    data=long_json,
+                    file_name=(
+                        "rf_long_iq_analysis.json"
+                    ),
+                    mime="application/json",
+                )
+
+                download_columns[
+                    1
+                ].download_button(
+                    "Download window CSV",
+                    data=long_csv,
+                    file_name=(
+                        "rf_long_iq_windows.csv"
+                    ),
+                    mime="text/csv",
+                )
 
 
 if __name__ == "__main__":

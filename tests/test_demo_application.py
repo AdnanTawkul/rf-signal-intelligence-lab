@@ -90,6 +90,12 @@ inference:
   default_device: auto
   top_k: 4
 
+long_signal:
+  default_stride: 1024
+  default_remainder_policy: drop
+  default_batch_size: 64
+  default_maximum_windows: 256
+
 visualization:
   default_sample_rate_hz: 1000000.0
   maximum_waveform_points: 256
@@ -128,6 +134,22 @@ visualization:
     assert (
         config.expected_sample_count
         == 2048
+    )
+    assert (
+        config.long_signal_default_stride
+        == 1024
+    )
+    assert (
+        config.long_signal_default_remainder_policy
+        == "drop"
+    )
+    assert (
+        config.long_signal_default_batch_size
+        == 64
+    )
+    assert (
+        config.long_signal_default_maximum_windows
+        == 256
     )
 
 

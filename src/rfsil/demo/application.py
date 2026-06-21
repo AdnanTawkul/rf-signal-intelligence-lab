@@ -38,6 +38,10 @@ class DemoConfig:
     input_scale: float
     default_device: str
     top_k: int
+    long_signal_default_stride: int
+    long_signal_default_remainder_policy: str
+    long_signal_default_batch_size: int
+    long_signal_default_maximum_windows: int
     default_sample_rate_hz: float
     maximum_waveform_points: int
     maximum_constellation_points: int
@@ -211,6 +215,10 @@ def load_demo_config(
         root.get("inference"),
         name="inference",
     )
+    long_signal = _mapping(
+        root.get("long_signal"),
+        name="long_signal",
+    )
     visualization = _mapping(
         root.get("visualization"),
         name="visualization",
@@ -242,6 +250,26 @@ def load_demo_config(
         raise ValueError(
             "inference.default_device must be "
             "auto, cpu, or cuda."
+        )
+
+    remainder_policy = _nonempty_string(
+        long_signal.get(
+            "default_remainder_policy"
+        ),
+        name=(
+            "long_signal."
+            "default_remainder_policy"
+        ),
+    ).lower()
+
+    if remainder_policy not in {
+        "drop",
+        "pad",
+        "error",
+    }:
+        raise ValueError(
+            "long_signal.default_remainder_policy "
+            "must be drop, pad, or error."
         )
 
     return DemoConfig(
@@ -292,6 +320,42 @@ def load_demo_config(
         top_k=_positive_integer(
             inference.get("top_k"),
             name="inference.top_k",
+        ),
+        long_signal_default_stride=(
+            _positive_integer(
+                long_signal.get(
+                    "default_stride"
+                ),
+                name=(
+                    "long_signal."
+                    "default_stride"
+                ),
+            )
+        ),
+        long_signal_default_remainder_policy=(
+            remainder_policy
+        ),
+        long_signal_default_batch_size=(
+            _positive_integer(
+                long_signal.get(
+                    "default_batch_size"
+                ),
+                name=(
+                    "long_signal."
+                    "default_batch_size"
+                ),
+            )
+        ),
+        long_signal_default_maximum_windows=(
+            _positive_integer(
+                long_signal.get(
+                    "default_maximum_windows"
+                ),
+                name=(
+                    "long_signal."
+                    "default_maximum_windows"
+                ),
+            )
         ),
         default_sample_rate_hz=(
             _positive_float(

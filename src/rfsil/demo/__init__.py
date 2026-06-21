@@ -11,6 +11,11 @@ from rfsil.demo.application import (
     run_single_window_prediction,
     select_loaded_window,
 )
+from rfsil.demo.long_signal_service import (
+    LongSignalAnalysis,
+    LongSignalWindowRecord,
+    analyze_long_iq,
+)
 from rfsil.demo.shift_service import (
     DemoShiftAssessment,
     FeatureContribution,
@@ -24,7 +29,10 @@ __all__ = [
     "DemoPrediction",
     "DemoShiftAssessment",
     "FeatureContribution",
+    "LongSignalAnalysis",
+    "LongSignalWindowRecord",
     "SignalViewData",
+    "analyze_long_iq",
     "assess_single_window_shift",
     "build_public_prediction_document",
     "build_shift_assessment_document",
