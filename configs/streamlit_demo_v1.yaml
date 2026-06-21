@@ -1,0 +1,26 @@
+experiment_name: streamlit_demo_v1
+
+checkpoint:
+  search_root: results
+  preferred_path: results/baseline_cnn_groupnorm_multipath_mixed_seed_sweep_v1/seed_2026/best_model.pt
+
+shift_detector:
+  artifact_path: artifacts/iq_shift_detector_v1.json
+
+inference:
+  expected_sample_count: 2048
+  input_scale: 1.0
+  default_device: auto
+  top_k: 4
+
+long_signal:
+  default_stride: 1024
+  default_remainder_policy: drop
+  default_batch_size: 64
+  default_maximum_windows: 256
+
+visualization:
+  default_sample_rate_hz: 1000000.0
+  maximum_waveform_points: 2048
+  maximum_constellation_points: 4096
+  spectrum_fft_size: 4096

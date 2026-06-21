@@ -2,7 +2,7 @@
 
 A local, reproducible AI engineering project for RF modulation recognition from synthetic and public raw IQ datasets.
 
-The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, representation analysis, classifier-head refitting, confidence calibration under channel shift, explicit IQ-based distribution-shift detection, deployment, long-signal inference, streaming inference, and reproducible latency benchmarking. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
+The repository covers the full experimental path from signal generation and channel simulation to PyTorch training, held-out evaluation, multi-seed reproducibility studies, architecture ablations, representation analysis, classifier-head refitting, confidence calibration under channel shift, explicit IQ-based distribution-shift detection, deployment, long-signal inference, streaming inference, reproducible latency benchmarking, and an interactive Streamlit demonstration. It is designed as a serious portfolio project for AI, RF, signal-processing, and applied ML engineering roles.
 
 ## Current Status
 
@@ -70,7 +70,11 @@ The project currently includes:
 - Timestamped online predictions
 - Fresh-process CPU and CUDA latency benchmarks
 - Throughput and CUDA-memory scaling analysis
-- 1,051 automated tests with `pytest`
+- Interactive Streamlit demo for fixed-window IQ classification
+- GUI channel-shift assessment using the exported 21-feature IQ detector
+- GUI long-signal and pre-windowed-batch analysis with per-window timelines
+- Path-safe JSON and CSV exports for predictions, shift features, aggregate probabilities, and window records
+- 1,091 automated tests with `pytest`
 - Static analysis with Ruff
 
 For the original clean-channel benchmark, the selected system remains the GroupNorm CNN with a validation-selected frozen linear-head refit. For frequency-selective multipath, the selected maximum-robustness model uses a jointly trained residual signal front end, while a frozen-backbone variant provides parameter-efficient adaptation by training only 2,944 parameters. For zero-shot transfer to RadioML 2016.10A, the plain mixed-I/Q baseline is selected because it reaches 52.54% accuracy across all 20 SNR levels and 67.03% on the shared six-SNR grid without dataset-specific calibration. A validation-selected `×112` input scale restores the frozen residual model to statistically comparable performance, but that result is treated as a post-hoc diagnostic.
@@ -79,11 +83,13 @@ The self-supervised label-efficiency milestone evaluates SimCLR, VICReg, and ran
 
 The deployment milestone provides a complete path from trained checkpoint to fixed-window, long-signal, and streaming IQ inference. CPU batch-one steady-state latency is 1.32 ms. CUDA reaches 54,501.9 windows per second at batch size 128, a 26.82× throughput improvement over CPU at the same batch size, while using 107.4 MiB of peak PyTorch-allocated GPU memory.
 
+The Streamlit demo milestone wraps the deployment and shift-detection components into a local interactive interface. It supports single-window classification, waveform/constellation/spectrum visualization, channel-shift assessment with feature contributions, long-signal or pre-windowed-batch analysis, per-window confidence and shift-score timelines, and path-safe JSON/CSV export.
+
 The confidence-calibration milestone fits one scalar temperature per checkpoint on clean validation logits and transfers the frozen temperatures to 300 held-out clean and multipath evaluations. Calibration improves clean NLL and ECE in 71 of 75 models, but usually worsens confidence quality under multipath.
 
 The channel-shift detection milestone then tests whether the model outputs themselves can identify that failure. Output energy remains close to chance across mild, moderate, and severe multipath, while explicit IQ-derived features are substantially stronger. The selected primary detector is a development-selected L2-regularized linear model over 21 deterministic IQ features. It reaches AUROC values of 0.8312, 0.9512, and 0.9794 on mild, moderate, and severe multipath, respectively. An IQ-plus-energy fusion variant slightly lowers mean FPR at 95% shift recall but does not improve mean AUROC overall.
 
-The next major research milestones are channel-aware calibration, uncertainty estimation, ONNX export, optimized inference, and an interactive demo.
+The next major research milestones are channel-aware calibration, uncertainty estimation, ONNX export, optimized inference, a persistent local inference service, and over-the-air receiver-data evaluation.
 
 ## Selected Supervised Baseline
 
@@ -404,6 +410,64 @@ Key deployment conclusions:
 
 Architecture, input contracts, command-line workflows, streaming behavior, benchmark protocol, complete results, limitations, and deployment recommendations are documented in [Deployment and IQ Inference Evaluation v1](reports/deployment_inference_v1.md).
 
+## Interactive Streamlit Demo
+
+The repository now includes a local Streamlit app that turns the deployment components into an interactive RF-IQ analysis workflow.
+
+Run the demo from the repository root:
+
+```powershell
+python -m streamlit run app.py
+```
+
+The default app configuration is stored in:
+
+```text
+configs/streamlit_demo_v1.yaml
+```
+
+### Demo Capabilities
+
+The Streamlit interface supports:
+
+- Uploading `.npy` and `.npz` IQ files
+- Selecting one window from a batch
+- Visualizing the I/Q waveform, constellation, and power spectrum
+- Running checkpoint-backed modulation classification
+- Displaying top-k class probabilities
+- Exporting single-window predictions as JSON
+- Exporting the single-window probability table as CSV
+- Running the 21-feature IQ channel-shift detector
+- Displaying shift score, threshold, score margin, and development AUROC
+- Showing the largest absolute IQ-feature contributions
+- Exporting shift assessment JSON and feature-contribution CSV files
+- Running long-signal or pre-windowed-batch analysis
+- Displaying aggregate modulation probabilities
+- Showing per-window confidence and shift-score timelines
+- Showing per-window predicted-class timelines
+- Exporting long-analysis JSON, aggregate-probability CSV, and per-window CSV files
+
+The GUI intentionally keeps exported artifacts path-safe: downloaded JSON and CSV files use public names such as `validation.npz` and relative checkpoint references instead of local absolute paths.
+
+### Example Single-Window Visualization
+
+![Streamlit single-window signal overview](reports/figures/streamlit_demo_single_window_v1.png)
+
+### Example Channel-Shift Assessment
+
+![Streamlit channel-shift assessment](reports/figures/streamlit_demo_shift_assessment_v1.png)
+
+### Example Long-Signal and Batch Analysis
+
+![Streamlit long-signal and batch analysis](reports/figures/streamlit_demo_long_analysis_v1.png)
+
+The GUI validation run used `data/processed/rf_modulation_baseline_v1/validation.npz`. A single selected window was correctly classified as `8psk` with 68.38% confidence. The corresponding shift detector score was `-0.3895` versus a threshold of `-0.4219`, so the window was flagged as shift-like at the selected high-recall operating point.
+
+For the batch-analysis path, the app processed the first 256 windows from the 1,400-window validation batch. The aggregate prediction was `qpsk` with 31.98% confidence, and 138 of 256 analyzed windows were marked shift-like.
+
+Complete implementation notes, validation results, export contracts, and limitations are documented in [Streamlit Demo v1](reports/streamlit_demo_v1.md).
+
+
 ## Why the Frozen Head Refit Was Selected
 
 The earlier GroupNorm baseline achieved:
@@ -650,6 +714,14 @@ Expected hardware in the original development environment:
 ```text
 NVIDIA GeForce RTX 4080 SUPER
 ```
+
+### 7. Launch the interactive demo
+
+```powershell
+python -m streamlit run app.py
+```
+
+The demo runs locally and uses `configs/streamlit_demo_v1.yaml` to select the default checkpoint, inference settings, visualization settings, long-analysis controls, and shift-detector artifact.
 
 ## Reproduce the Selected Baseline
 
@@ -980,6 +1052,40 @@ python scripts\analyze_deployment_benchmark.py `
   --input-directory results\deployment_benchmark_v1\full_cases
 ```
 
+## Reproduce the Streamlit Demo Workflow
+
+The Streamlit demo uses a trained checkpoint, the exported IQ shift detector, and local `.npy` or `.npz` IQ inputs.
+
+### Launch the GUI
+
+```powershell
+python -m streamlit run app.py
+```
+
+### Recommended demo input
+
+```text
+data\processed\rf_modulation_baseline_v1\validation.npz
+```
+
+### Single-window workflow
+
+1. Upload the validation NPZ file.
+2. Keep the `iq` array key.
+3. Select a window position.
+4. Run modulation classification.
+5. Run channel-shift assessment.
+6. Download the prediction JSON, probability CSV, shift JSON, and feature-contribution CSV.
+
+### Long-analysis workflow
+
+1. Upload the same validation NPZ file in the long-signal and batch-analysis section.
+2. Keep the default maximum of 256 analyzed windows for interactive responsiveness.
+3. Run long-signal analysis.
+4. Review aggregate probabilities, confidence timeline, shift-score timeline, predicted-class timeline, and the window table.
+5. Download the long-analysis JSON, aggregate-probability CSV, and per-window CSV.
+
+
 ## Reproduce Historical Ablations
 
 ### Original BatchNorm five-seed study
@@ -1014,7 +1120,7 @@ python -m pytest -W error
 Run static analysis:
 
 ```powershell
-python -m ruff check src tests scripts
+python -m ruff check src tests scripts app.py
 ```
 
 Check whitespace and patch integrity:
@@ -1023,7 +1129,7 @@ Check whitespace and patch integrity:
 git diff --check
 ```
 
-At the current milestone, the repository contains **1,051 passing tests**.
+At the current milestone, the repository contains **1,091 passing tests**.
 
 ## Repository Structure
 
@@ -1102,6 +1208,8 @@ It does not include:
 - The IQ detector is evaluated on paired synthetic channel variants. Transfer to unpaired distributions, different receivers, and over-the-air recordings is not yet established.
 - Mild multipath remains difficult at high recall: the best observed mild FPR@95TPR is 0.7366.
 - The current IQ feature definitions were validated on 2,048-sample windows; transfer across sample rates and window lengths still requires study.
+- The Streamlit demo is a local engineering interface rather than a hosted production service.
+- Long-analysis GUI runs intentionally cap the number of analyzed windows for interactive responsiveness.
 - Channel-aware confidence calibration that conditions on detected shift is not yet implemented.
 - Uncertainty estimation beyond scalar confidence calibration is not yet implemented.
 - The SimCLR and VICReg downstream studies each reuse one fixed pretrained checkpoint, so SSL-pretraining variance is not yet measured.
@@ -1183,6 +1291,11 @@ It does not include:
 - [x] Grouped-CV all-IQ linear shift detector
 - [x] 75-checkpoint lag-8, all-IQ, energy, and fusion comparison
 - [x] Channel-shift detector figures and technical report
+- [x] Exported deployable IQ channel-shift detector artifact
+- [x] Streamlit fixed-window modulation demo
+- [x] Streamlit channel-shift assessment panel
+- [x] Streamlit long-signal and pre-windowed-batch analysis
+- [x] GUI JSON and CSV export validation
 
 ### Next
 
@@ -1193,7 +1306,6 @@ It does not include:
 - [ ] Mixed-precision inference
 - [ ] Quantization experiments
 - [ ] Persistent local inference service
-- [ ] Streamlit demo
 - [ ] Over-the-air receiver-data evaluation
 - [ ] Final project-wide technical report
 
